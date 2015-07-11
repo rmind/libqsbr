@@ -26,15 +26,15 @@ obj_reclaim(gc_entry_t *entry)
 {
 	object_t *obj;
 
-	/* Destroy the actual object since it is safe now. */
+	/* Destroy the actual object; at this point it is safe. */
 	obj = (object_t *)((uintptr_t)entry - offsetof(object_t, gc_entry));
-	free(obj)
+	free(obj);
 }
 
 void
 some_sysinit(void)
 {
-	gc = gc_create(obj_reclaim)
+	gc = gc_create(obj_reclaim);
 	assert(gc != NULL);
 	...
 }
@@ -64,8 +64,8 @@ worker_thread(void *arg)
 		/*
 		 * Perform an asynchronous flush: attempt to reclaim the
 		 * objects previously added to the list; if they are not
-		 * ready to be reclaimed - just returns, so this flush
-		 * should be invoked periodically.
+		 * ready to be reclaimed - the function just returns, so
+		 * the flush should be invoked periodically.
 		 */
 		gc_async_flush(gc);
 	}
