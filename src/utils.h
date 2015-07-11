@@ -203,7 +203,9 @@ do {								\
 /*
  * Various utility functions.
  */
-void *		zalloc(size_t);
+
+#define	zalloc(len)	calloc(1, (len))
+
 unsigned	split(char *, const char *, char **, unsigned);
 bool		strtou64(const char *, uint64_t *);
 bool		bytestou64(const char *, uint64_t *);
