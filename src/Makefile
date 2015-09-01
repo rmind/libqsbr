@@ -15,7 +15,7 @@ endif
 LIB=		libqsbr
 INCS=		qsbr.h gc.h
 
-OBJS=		qsbr.o gc.o tls.o
+OBJS=		qsbr.o gc.o
 
 $(LIB).la:	LDFLAGS+=	-rpath $(LIBDIR)
 install/%.la:	ILIBDIR=	$(DESTDIR)/$(LIBDIR)

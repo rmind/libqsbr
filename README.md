@@ -1,8 +1,9 @@
-# Quiescent-State-Based Reclamation (QSBR)
+# Quiescent-State-Based Reclamation
 
-QSBR is a synchronisation mechanism which can be used for efficient memory
-reclamation (garbage collection) in multi-threaded environment.  Conceptually
-it is very similar to the read-copy-update (RCU) mechanism.
+Quiescent-State-Based Reclamation (QSBR) is a synchronisation mechanism
+which can be used for efficient memory reclamation (garbage collection)
+in multi-threaded environment.  Conceptually it is very similar to the
+read-copy-update (RCU) mechanism.
 
 QSBR is simpler, more lightweight and faster than RCU.  However, unlike RCU,
 it requires *each* thread to register and manually indicate the quiescent

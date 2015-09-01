@@ -29,9 +29,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
+#include <pthread.h>
 
 #include "qsbr.h"
-#include "tls.h"
 #include "utils.h"
 
 /*
@@ -54,7 +54,7 @@ struct qsbr {
 	 * The global epoch, TLS key with a list of the registered threads.
 	 */
 	qsbr_epoch_t		global_epoch;
-	tls_key_t *		tls_key;
+	pthread_key_t		tls_key;
 	qsbr_tls_t *		list;
 };
 
@@ -66,8 +66,7 @@ qsbr_create(void)
 	if ((qs = zalloc(sizeof(qsbr_t))) == NULL) {
 		return NULL;
 	}
-	qs->tls_key = tls_create(sizeof(qsbr_tls_t));
-	if (qs->tls_key == NULL) {
+	if (pthread_key_create(&qs->tls_key, free) != 0) {
 		free(qs);
 		return NULL;
 	}
@@ -78,7 +77,7 @@ qsbr_create(void)
 void
 qsbr_destroy(qsbr_t *qs)
 {
-	tls_destroy(qs->tls_key);
+	pthread_key_delete(qs->tls_key);
 	free(qs);
 }
 
@@ -90,8 +89,12 @@ qsbr_register(qsbr_t *qs)
 {
 	qsbr_tls_t *t, *head;
 
-	if ((t = tls_get(qs->tls_key)) == NULL) {
-		return ENOMEM;
+	t = pthread_getspecific(qs->tls_key);
+	if (__predict_false(t == NULL)) {
+		if ((t = malloc(sizeof(qsbr_tls_t))) == NULL) {
+			return ENOMEM;
+		}
+		pthread_setspecific(qs->tls_key, t);
 	}
 	memset(t, 0, sizeof(qsbr_tls_t));
 
@@ -111,7 +114,7 @@ qsbr_checkpoint(qsbr_t *qs)
 {
 	qsbr_tls_t *t;
 
-	t = tls_get(qs->tls_key);
+	t = pthread_getspecific(qs->tls_key);
 	ASSERT(t != NULL);
 
 	/* Observe the current epoch. */
