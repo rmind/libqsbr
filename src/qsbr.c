@@ -127,7 +127,7 @@ qsbr_epoch_t
 qsbr_barrier(qsbr_t *qs)
 {
 	/* Note: atomic operation will issue a store barrier. */
-	return atomic_fetch_add(&qs->global_epoch, 1);
+	return atomic_fetch_add(&qs->global_epoch, 1) + 1;
 }
 
 bool
