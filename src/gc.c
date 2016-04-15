@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015 Mindaugas Rasiukevicius <rmind at netbsd org>
+ * Copyright (c) 2015 Mindaugas Rasiukevicius <rmind at noxt eu>
  * All rights reserved.
  *
  * Use is subject to license terms, as specified in the LICENSE file.

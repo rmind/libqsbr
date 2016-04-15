@@ -71,7 +71,7 @@
 #endif
 
 #ifndef __UNCONST
-#define	__UNCONST(a)		((void*)(const void*)a)
+#define	__UNCONST(a)		((void *)(unsigned long)(const void *)(a))
 #endif
 
 /*
@@ -82,13 +82,16 @@
 #define	MIN(x, y)	((x) < (y) ? (x) : (y))
 #endif
 
-#ifndef MAN
+#ifndef MAX
 #define	MAX(x, y)	((x) > (y) ? (x) : (y))
 #endif
 
 #define	roundup(x, y)	((((x)+((y)-1))/(y))*(y))
 #define	rounddown(x,y)	(((x)/(y))*(y))
+
+#ifndef roundup2
 #define	roundup2(x, m)	(((x) + (m) - 1) & ~((m) - 1))
+#endif
 
 /*
  * Maths helpers: log2 on integer, fast division and remainder.
@@ -170,9 +173,10 @@ atomic_exchange(volatile void *ptr, void *nptr)
 /*
  * memory_order_acquire	- membar_consumer/smp_rmb
  * memory_order_release	- membar_producer/smp_wmb
- * memory_order_seq_cst	- membar_sync/smp_mb
  */
-#define	atomic_thread_fence(m)	__sync_synchronize()
+#define	memory_order_acquire	__atomic_thread_fence(__ATOMIC_ACQUIRE)
+#define	memory_order_release	__atomic_thread_fence(__ATOMIC_RELEASE)
+#define	atomic_thread_fence(m)	m
 #endif
 
 /*
@@ -199,16 +203,5 @@ do {								\
  * Cache line size - a reasonable upper bound.
  */
 #define	CACHE_LINE_SIZE		64
-
-/*
- * Various utility functions.
- */
-
-#define	zalloc(len)	calloc(1, (len))
-
-unsigned	split(char *, const char *, char **, unsigned);
-bool		strtou64(const char *, uint64_t *);
-bool		bytestou64(const char *, uint64_t *);
-uint32_t	murmurhash2(const void *, size_t, uint32_t);
 
 #endif

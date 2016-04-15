@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015 Mindaugas Rasiukevicius <rmind at netbsd org>
+ * Copyright (c) 2015 Mindaugas Rasiukevicius <rmind at noxt eu>
  * All rights reserved.
  *
  * Use is subject to license terms, as specified in the LICENSE file.
@@ -63,7 +63,7 @@ qsbr_create(void)
 {
 	qsbr_t *qs;
 
-	if ((qs = zalloc(sizeof(qsbr_t))) == NULL) {
+	if ((qs = calloc(1, sizeof(qsbr_t))) == NULL) {
 		return NULL;
 	}
 	if (pthread_key_create(&qs->tls_key, free) != 0) {
