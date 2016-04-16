@@ -13,9 +13,9 @@ LDFLAGS=	-flto
 endif
 
 LIB=		libqsbr
-INCS=		qsbr.h gc.h
+INCS=		ebr.h qsbr.h gc.h
 
-OBJS=		qsbr.o gc.o
+OBJS=		ebr.o qsbr.o gc.o
 
 $(LIB).la:	LDFLAGS+=	-rpath $(LIBDIR)
 install/%.la:	ILIBDIR=	$(DESTDIR)/$(LIBDIR)
