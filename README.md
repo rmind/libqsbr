@@ -25,11 +25,17 @@ static gc_t *	gc;
 static void
 obj_reclaim(gc_entry_t *entry)
 {
-	object_t *obj;
+	/*
+	 * Note: a list of entries is passed to the reclaim function.
+	 */
+	while (entry) {
+		obj_t *obj;
 
-	/* Destroy the actual object; at this point it is safe. */
-	obj = (object_t *)((uintptr_t)entry - offsetof(object_t, gc_entry));
-	free(obj);
+		/* Destroy the actual object; at this point it is safe. */
+		obj = (obj_t *)((uintptr_t)entry - offsetof(obj_t, gc_entry));
+		entry = entry->next;
+		free(obj);
+	}
 }
 
 void

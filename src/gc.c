@@ -25,7 +25,6 @@ struct gc {
 	 * to a stage list once the QSBR barrier is issued.
 	 */
 	gc_entry_t *	limbo;
-	gc_entry_t *	tail;
 
 	/*
 	 * Stage list with a target epoch.  Once we observe the target
@@ -82,18 +81,15 @@ gc_checkpoint(gc_t *gc)
 void
 gc_limbo(gc_t *gc, gc_entry_t *ent)
 {
+	gc_entry_t *head;
+
 	/*
-	 * Insert into the limbo list.  We may need to set the tail.
+	 * Lockless insert into the limbo list.
 	 */
-	if (gc->limbo) {
-		ASSERT(gc->tail != NULL);
-		ent->next = gc->limbo;
-		gc->limbo = ent;
-	} else {
-		ASSERT(gc->tail == NULL);
-		gc->limbo = gc->tail = ent;
-		ent->next = NULL;
-	}
+	do {
+		head = gc->limbo;
+		ent->next = head;
+	} while (!atomic_compare_exchange_weak(&gc->limbo, head, ent));
 }
 
 void
@@ -114,30 +110,24 @@ gc_async_flush(gc_t *gc)
 	 * If the limbo list does not have new entries - nothing to do.
 	 */
 	if (gc->limbo == NULL) {
-		ASSERT(gc->tail == NULL);
 		return;
 	}
-	ASSERT(gc->tail != NULL);
 
 	/*
-	 * Consider moving the limbo entries to the stage list only
-	 * every second request.  Otherwise, we might have a constantly
-	 * moving target epoch.
+	 * Move the entries from limbo to stage list, if it is empty.
+	 */
+	if (gc->stage_list == NULL) {
+		gc->stage_list = atomic_exchange(&gc->limbo, NULL);
+	}
+
+	/*
+	 * Issue a QSBR barrier which returns a new epoch every second
+	 * requests.  Otherwise, we might have a constantly moving target
+	 * epoch when stage list reclamation is never ready.
 	 */
 	gc->move_toggle = !gc->move_toggle;
 	if (gc->move_toggle) {
-		/*
-		 * Move the entries from limbo to stage list.
-		 */
-		ASSERT(gc->tail != NULL);
-		gc->tail->next = gc->stage_list;
-		gc->stage_list = gc->limbo;
-		gc->limbo = gc->tail = NULL;
-
-		/*
-		 * Issue a QSBR barrier which returns a new epoch.
-		 * It is a new stage target.
-		 */
+		/* New stage target! */
 		gc->stage_epoch = qsbr_barrier(qsbr);
 	}
 }
