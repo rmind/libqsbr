@@ -11,8 +11,9 @@
 #include <sys/cdefs.h>
 #include <stdbool.h>
 
-typedef struct qsbr	qsbr_t;
-typedef unsigned long	qsbr_epoch_t;
+struct qsbr;
+typedef struct qsbr qsbr_t;
+typedef unsigned long qsbr_epoch_t;
 
 __BEGIN_DECLS
 
