@@ -1,17 +1,21 @@
-# Quiescent-State-Based Reclamation
+# Quiescent-State and Epoch based reclamation
 
-Quiescent-State-Based Reclamation (QSBR) is a synchronisation mechanism
-which can be used for efficient memory reclamation (garbage collection)
-in multi-threaded environment.  Conceptually it is very similar to the
-read-copy-update (RCU) mechanism.
+Quiescent-State-Based Reclamation (QSBR) and Epoch-Based Reclamation (EBR)
+are synchronisation mechanisms which can be used for efficient memory
+reclamation (garbage collection) in multi-threaded environment.
+Conceptually they are very similar to the read-copy-update (RCU) mechanism.
 
 QSBR is simpler, more lightweight and faster than RCU.  However, unlike RCU,
 it requires *each* thread to register and manually indicate the quiescent
-state.  In practice, many applications can easily do that.
+state i.e. threads must periodically pass a checkpoint.  In practice, many
+applications can easily do that.  As a more convenient alternative, EBR
+allows user to mark the critical code paths without the need to periodically
+indicate the quiescent state.  It is slightly slower than QSBR due to the
+need to issue a memory barrier on the reader side.
 
-A typical use case of the QSBR mechanism would be together with lock-free
-data structures.  This library provides a raw QSBR interface and a garbage
-collection (GC) interface based on QSBR.
+A typical use case of the QSBR or EBR would be together with lock-free data
+structures.  This library provides a raw QSBR and EBR mechanisms as well as
+a higher level a garbage collection (GC) interface based on QSBR.
 
 The libqsbr library is released under the BSD license.
 
