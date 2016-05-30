@@ -16,6 +16,8 @@ __BEGIN_DECLS
 struct ebr;
 typedef struct ebr ebr_t;
 
+#define	EBR_EPOCHS	3
+
 ebr_t *		ebr_create(void);
 void		ebr_destroy(ebr_t *);
 int		ebr_register(ebr_t *);

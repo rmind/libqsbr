@@ -88,7 +88,7 @@ ebr_register(ebr_t *ebr)
 	t = pthread_getspecific(ebr->tls_key);
 	if (__predict_false(t == NULL)) {
 		if ((t = malloc(sizeof(ebr_tls_t))) == NULL) {
-			return ENOMEM;
+			return -1;
 		}
 		pthread_setspecific(ebr->tls_key, t);
 	}
