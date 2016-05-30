@@ -45,13 +45,15 @@ The libqsbr library is released under the BSD license.
   * Attempt to synchronise and announce a new epoch.  On success, returns
   `true` and the _epoch_ available for reclamation; returns false if not
   ready.  The number of epochs is defined by the `EBR_EPOCHS` constant and
-  the epoch value is `0 < epoch <= EBR_EPOCHS`.  Note: the synchronisations
+  the epoch value is `0 < epoch < EBR_EPOCHS`.  Note: the synchronisations
   points must be serialised (e.g. if there are multiple G/C thread or other
   forms of writers).
 
 * `unsigned ebr_gc_epoch(ebr_t *ebr)`
-  * Returns the current _epoch_ available for reclamation.  Note: may
-  require the same form of serialisation as for `ebr_sync()`.
+  * Returns the current _epoch_ available for reclamation.  The _epoch_
+  value shall be the same as returned by the last successful `ebr_sync`
+  call.  Note that these two functions would typically require the same
+  form of serialisation.
 
 ## Examples ###
 
