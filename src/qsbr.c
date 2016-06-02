@@ -118,9 +118,9 @@ qsbr_checkpoint(qsbr_t *qs)
 	ASSERT(t != NULL);
 
 	/* Observe the current epoch. */
-	atomic_thread_fence(memory_order_acquire);
-	t->local_epoch = qs->global_epoch;
 	atomic_thread_fence(memory_order_release);
+	t->local_epoch = qs->global_epoch;
+	atomic_thread_fence(memory_order_acquire);
 }
 
 qsbr_epoch_t
