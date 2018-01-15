@@ -20,6 +20,7 @@ __BEGIN_DECLS
 qsbr_t *	qsbr_create(void);
 void		qsbr_destroy(qsbr_t *);
 
+void		qsbr_unregister(qsbr_t *);
 int		qsbr_register(qsbr_t *);
 void		qsbr_checkpoint(qsbr_t *);
 qsbr_epoch_t	qsbr_barrier(qsbr_t *);

@@ -75,6 +75,15 @@ qsbr_create(void)
 }
 
 void
+qsbr_unregister(qsbr_t *qs)
+{
+	qsbr_tls_t *t = pthread_getspecific(qs->tls_key);
+
+	free(t);
+	pthread_setspecific(qs->tls_key, NULL);
+}
+
+void
 qsbr_destroy(qsbr_t *qs)
 {
 	pthread_key_delete(qs->tls_key);
