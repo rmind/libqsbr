@@ -111,6 +111,7 @@ atomic_exchange(volatile void *ptr, void *nptr)
 #ifndef atomic_thread_fence
 #define	memory_order_acquire	__ATOMIC_ACQUIRE	// load barrier
 #define	memory_order_release	__ATOMIC_RELEASE	// store barrier
+#define	memory_order_acq_rel	__ATOMIC_ACQ_REL
 #define	atomic_thread_fence(m)	__atomic_thread_fence(m)
 #endif
 

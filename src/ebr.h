@@ -8,9 +8,6 @@
 #ifndef	_EBR_H_
 #define	_EBR_H_
 
-#include <sys/cdefs.h>
-#include <stdbool.h>
-
 __BEGIN_DECLS
 
 struct ebr;
@@ -25,6 +22,7 @@ int		ebr_register(ebr_t *);
 void		ebr_enter(ebr_t *);
 void		ebr_exit(ebr_t *);
 bool		ebr_sync(ebr_t *, unsigned *);
+unsigned	ebr_pending_epoch(ebr_t *);
 unsigned	ebr_gc_epoch(ebr_t *);
 
 __END_DECLS

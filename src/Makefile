@@ -2,14 +2,20 @@
 # This file is in the Public Domain.
 #
 
-CFLAGS=		-std=gnu99 -O2 -flto -g -Wall -Wextra -Werror
+CFLAGS=		-std=c11 -O2 -g -W -Wextra -Werror
+CFLAGS+=	-D_POSIX_C_SOURCE=200809L
+CFLAGS+=	-D_GNU_SOURCE -D_DEFAULT_SOURCE
+
 CFLAGS+=	-Wstrict-prototypes -Wmissing-prototypes -Wpointer-arith
+CFLAGS+=	-Wmissing-declarations -Wredundant-decls -Wnested-externs
+CFLAGS+=	-Wshadow -Wcast-qual -Wcast-align -Wwrite-strings
+CFLAGS+=	-Wold-style-definition
+#CFLAGS+=	-Wsuggest-attribute=noreturn -Wjump-misses-init
 
 ifeq ($(DEBUG),1)
 CFLAGS+=	-O1 -DDEBUG -fno-omit-frame-pointer
 else
 CFLAGS+=	-DNDEBUG
-LDFLAGS=	-flto
 endif
 
 LIB=		libqsbr
@@ -21,6 +27,8 @@ $(LIB).la:	LDFLAGS+=	-rpath $(LIBDIR)
 install/%.la:	ILIBDIR=	$(DESTDIR)/$(LIBDIR)
 install:	IINCDIR=	$(DESTDIR)/$(INCDIR)/qsbr
 #install:	IMANDIR=	$(DESTDIR)/$(MANDIR)/man3/
+
+obj: $(OBJS)
 
 lib: $(LIB).la
 
@@ -39,8 +47,11 @@ install: $(addprefix install/,$(LIB).la)
 	mkdir -p $(IINCDIR) && install -c $(INCS) $(IINCDIR)
 	#mkdir -p $(IMANDIR) && install -c $(MANS) $(IMANDIR)
 
+stress: $(OBJS) t_stress.o
+	$(CC) $(CFLAGS) $^ -o t_stress $(LDFLAGS) -lpthread
+
 clean:
 	libtool --mode=clean rm
 	@ rm -rf .libs *.o *.lo *.la
 
-.PHONY: all lib install clean
+.PHONY: all obj lib install stress clean

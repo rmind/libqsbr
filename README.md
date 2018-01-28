@@ -17,7 +17,7 @@ A typical use case of the QSBR or EBR would be together with lock-free data
 structures.  This library provides a raw QSBR and EBR mechanisms as well as
 a higher level a garbage collection (GC) interface based on QSBR.
 
-The libqsbr library is written in C11 and is distributed under the
+The implementation is written in C11 and distributed under the
 2-clause BSD license.
 
 ## EBR API
@@ -43,18 +43,32 @@ The libqsbr library is written in C11 and is distributed under the
   acquired by the reader.
 
 * `bool ebr_sync(ebr_t *ebr, unsigned *gc_epoch)`
-  * Attempt to synchronise and announce a new epoch.  On success, returns
-  `true` and the _epoch_ available for reclamation; returns false if not
-  ready.  The number of epochs is defined by the `EBR_EPOCHS` constant and
-  the epoch value is `0 <= epoch < EBR_EPOCHS`.  Note: the synchronisations
-  points must be serialised (e.g. if there are multiple G/C threads or
-  other writers).
+  * Attempt to synchronise and announce a new epoch.  If a new epoch
+  is announced, returns `true`.  In any case, the _epoch_ available for
+  reclamation is returned.  The number of epochs is defined by the
+  `EBR_EPOCHS` constant and the epoch value is `0 <= epoch < EBR_EPOCHS`.
+  Note: the synchronisation points must be serialised (e.g. if there
+  are multiple G/C workers or other writers); typically, calls to the
+  `ebr_pending_epoch` and `ebr_gc_epoch` would be a part of the same
+  serialised path.
+
+* `unsigned ebr_pending_epoch(ebr_t *ebr)`
+  * Returns an _epoch_ pending for reclamation.  This can be used as
+  reference value for the pending queue/tag, used to postpone the
+  reclamation until this epoch becomes available for G/C.  Note that
+  this functions would typically be serialised together with the
+  `ebr_sync` calls.
 
 * `unsigned ebr_gc_epoch(ebr_t *ebr)`
-  * Returns the current _epoch_ available for reclamation.  The _epoch_
-  value shall be the same as returned by the last successful `ebr_sync`
-  call.  Note that these two functions would typically require the same
-  form of serialisation.
+  * Returns the _epoch_ available for reclamation.  The _epoch_ value
+  shall be the same as returned by the last successful `ebr_sync` call.
+  Note that these two functions would typically require the same form
+  of serialisation.
+
+## Notes
+
+The implementation was extensively tested on a 24-core x86 machine,
+see [the stress test](src/t_stress.c) for the details on the technique.
 
 ## Examples ###
 

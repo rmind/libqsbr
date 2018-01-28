@@ -24,6 +24,7 @@
  */
 
 #include <stdlib.h>
+#include <stdbool.h>
 #include <string.h>
 #include <errno.h>
 #include <pthread.h>
@@ -145,14 +146,21 @@ ebr_exit(ebr_t *ebr)
 /*
  * ebr_sync: attempt to synchronise and announce a new epoch.
  *
- * => Return true on success and false if not ready.
  * => Synchronisation points must be serialised.
+ * => Return true on if a new epoch was announced.
  */
 bool
 ebr_sync(ebr_t *ebr, unsigned *gc_epoch)
 {
 	unsigned epoch;
 	ebr_tls_t *t;
+
+	/*
+	 * Ensure that any stores on the writer side reach the global
+	 * visibility.  We want to allow the callers to assume that the
+	 * ebr_sync() call serves as a barrier.
+	 */
+	atomic_thread_fence(memory_order_acq_rel);
 
 	/*
 	 * Check whether all active threads observed the global epoch.
@@ -167,6 +175,7 @@ ebr_sync(ebr_t *ebr, unsigned *gc_epoch)
 		}
 		t = t->next;
 	}
+	atomic_thread_fence(memory_order_acq_rel);
 
 	/* Yes: increment and announce a new global epoch. */
 	ebr->global_epoch = (epoch + 1) % 3;
@@ -186,6 +195,13 @@ ebr_sync(ebr_t *ebr, unsigned *gc_epoch)
 	 */
 	*gc_epoch = ebr_gc_epoch(ebr);
 	return true;
+}
+
+unsigned
+ebr_pending_epoch(ebr_t *ebr)
+{
+	/* The current epoch. */
+	return ebr->global_epoch;
 }
 
 unsigned
