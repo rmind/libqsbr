@@ -55,7 +55,7 @@ ebr_writer(unsigned target)
 		 */
 		assert(obj->visible);
 		obj->visible = false;
-		obj->gc_epoch = ebr_pending_epoch(ebr);
+		obj->gc_epoch = EBR_EPOCHS + ebr_pending_epoch(ebr);
 
 	} else if (!obj->gc_epoch) {
 		/*
@@ -75,7 +75,7 @@ ebr_writer(unsigned target)
 	ebr_sync(ebr, &epoch);
 
 	for (unsigned i = 0; i < DS_COUNT; i++) {
-		if (obj->gc_epoch && (obj->gc_epoch - EPOCH_OFF) == epoch) {
+		if (obj->gc_epoch == EPOCH_OFF + epoch) {
 			obj->ptr = NULL;
 			obj->gc_epoch = 0;
 		}
@@ -99,7 +99,7 @@ ebr_stress(void *arg)
 
 	pthread_barrier_wait(&barrier);
 	while (!stop) {
-		n = n++ & (DS_COUNT - 1);
+		n = ++n & (DS_COUNT - 1);
 
 		if (id == 0) {
 			ebr_writer(n);
