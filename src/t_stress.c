@@ -30,7 +30,8 @@ typedef struct {
 	unsigned int *		ptr;
 	unsigned int		visible;
 	unsigned int		gc_epoch;
-	char			_pad[CACHE_LINE_SIZE - (sizeof(int) * 2)];
+	char			_pad[
+	    CACHE_LINE_SIZE - (sizeof(unsigned int *) + sizeof(int) * 2)];
 } data_struct_t;
 
 #define	DS_COUNT		4
