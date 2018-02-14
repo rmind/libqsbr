@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015 Mindaugas Rasiukevicius <rmind at noxt eu>
+ * Copyright (c) 2015-2018 Mindaugas Rasiukevicius <rmind at noxt eu>
  * All rights reserved.
  *
  * Use is subject to license terms, as specified in the LICENSE file.
@@ -13,69 +13,94 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>
+#include <inttypes.h>
 #include <time.h>
 
 #include "gc.h"
-#include "qsbr.h"
+#include "ebr.h"
 #include "utils.h"
 
 struct gc {
 	/*
 	 * Objects are first inserted into the limbo list.  They move
-	 * to a stage list once the QSBR barrier is issued.
+	 * to a current epoch list on a G/C cycle.
 	 */
 	gc_entry_t *	limbo;
 
 	/*
-	 * Stage list with a target epoch.  Once we observe the target
-	 * epoch, the objects in this list can be reclaimed.
+	 * A separate list for each epoch.  Objects in each list
+	 * are reclaimed incrementally, as ebr_sync() announces new
+	 * epochs ready to be reclaimed.
 	 */
-	qsbr_epoch_t	stage_epoch;
-	gc_entry_t *	stage_list;
-	bool		move_toggle;
+	gc_entry_t *	epoch_list[EBR_EPOCHS];
 
-	/* QSBR object and the reclamation function. */
-	qsbr_t *	qsbr;
-	void		(*reclaim)(gc_entry_t *);
+	/*
+	 * EBR object and the reclamation function.
+	 */
+	ebr_t *		ebr;
+	gc_func_t	reclaim;
+	unsigned	obj_off;
 };
 
+static void
+gc_default_reclaim(gc_t *gc, gc_entry_t *entry)
+{
+	const unsigned off = gc->obj_off;
+	void *obj;
+
+	while (entry) {
+		obj = (void *)((uintptr_t)entry - off);
+		entry = entry->next;
+		free(obj);
+	}
+}
+
 gc_t *
-gc_create(void (*reclaim)(gc_entry_t *))
+gc_create(gc_func_t reclaim, unsigned off)
 {
 	gc_t *gc;
 
 	if ((gc = calloc(1, sizeof(gc_t))) == NULL) {
 		return NULL;
 	}
-	gc->qsbr = qsbr_create();
-	if (!gc->qsbr) {
+	gc->ebr = ebr_create();
+	if (!gc->ebr) {
 		free(gc);
 		return NULL;
 	}
-	gc->reclaim = reclaim;
+	gc->reclaim = reclaim ? reclaim : gc_default_reclaim;
+	gc->obj_off = off;
 	return gc;
 }
 
 void
 gc_destroy(gc_t *gc)
 {
+	for (unsigned i = 0; i < EBR_EPOCHS; i++) {
+		ASSERT(gc->epoch_list[i] == NULL);
+	}
 	ASSERT(gc->limbo == NULL);
-	ASSERT(gc->stage_list == NULL);
 
-	qsbr_destroy(gc->qsbr);
+	ebr_destroy(gc->ebr);
 	free(gc);
 }
 
 void
 gc_register(gc_t *gc)
 {
-	qsbr_register(gc->qsbr);
+	ebr_register(gc->ebr);
 }
 
 void
-gc_checkpoint(gc_t *gc)
+gc_crit_enter(gc_t *gc)
 {
-	qsbr_checkpoint(gc->qsbr);
+	ebr_enter(gc->ebr);
+}
+
+void
+gc_crit_exit(gc_t *gc)
+{
+	ebr_exit(gc->ebr);
 }
 
 void
@@ -84,7 +109,7 @@ gc_limbo(gc_t *gc, gc_entry_t *ent)
 	gc_entry_t *head;
 
 	/*
-	 * Lockless insert into the limbo list.
+	 * Insert into the limbo list.
 	 */
 	do {
 		head = gc->limbo;
@@ -93,51 +118,75 @@ gc_limbo(gc_t *gc, gc_entry_t *ent)
 }
 
 void
-gc_async_flush(gc_t *gc)
+gc_cycle(gc_t *gc)
 {
-	qsbr_t *qsbr = gc->qsbr;
-
+	unsigned count = EBR_EPOCHS, gc_epoch, staging_epoch;
+	ebr_t *ebr = gc->ebr;
+	gc_entry_t *gc_list;
+next:
 	/*
-	 * First, check whether the previous (stage target) epoch has
-	 * been globally observed.  If so, we can reclaim the stage list.
+	 * Call the EBR synchronisation and check whether it announces
+	 * a new epoch.
 	 */
-	if (gc->stage_list && qsbr_sync(qsbr, gc->stage_epoch)) {
-		gc->reclaim(gc->stage_list);
-		gc->stage_list = NULL;
-	}
-
-	/*
-	 * If the limbo list does not have new entries - nothing to do.
-	 */
-	if (gc->limbo == NULL) {
+	if (!ebr_sync(ebr, &gc_epoch)) {
+		/* New epoch was not announced -- not ready reclaim. */
 		return;
 	}
 
 	/*
-	 * Move the entries from limbo to stage list, if it is empty.
+	 * Move the objects from the limbo list into the staging epoch.
 	 */
-	if (gc->stage_list == NULL) {
-		gc->stage_list = atomic_exchange(&gc->limbo, NULL);
-	}
+	staging_epoch = ebr_pending_epoch(ebr);
+	ASSERT(gc->epoch_list[staging_epoch] == NULL);
+	gc->epoch_list[staging_epoch] = atomic_exchange(&gc->limbo, NULL);
 
 	/*
-	 * Issue a QSBR barrier which returns a new epoch every second
-	 * requests.  Otherwise, we might have a constantly moving target
-	 * epoch when stage list reclamation is never ready.
+	 * Reclaim the objects in the G/C epoch list.
 	 */
-	gc->move_toggle = !gc->move_toggle;
-	if (gc->move_toggle) {
-		/* New stage target! */
-		gc->stage_epoch = qsbr_barrier(qsbr);
+	gc_list = gc->epoch_list[gc_epoch];
+	if (!gc_list && count--) {
+		/*
+		 * If there is nothing to G/C -- try a next epoch,
+		 * but loop only for one "full" cycle.
+		 */
+		goto next;
 	}
+	gc->reclaim(gc, gc_list);
+	gc->epoch_list[gc_epoch] = NULL;
 }
 
 void
-gc_full_flush(gc_t *gc, unsigned msec_delta)
+gc_full(gc_t *gc, unsigned msec_retry)
 {
-	const struct timespec dtime = { 0, msec_delta * 1000 * 1000 };
+	const struct timespec dtime = { 0, msec_retry * 1000 * 1000 };
+	unsigned n, count = SPINLOCK_BACKOFF_MIN;
+	bool done;
+again:
+	/*
+	 * Run a G/C cycle.
+	 */
+	gc_cycle(gc);
 
-	while (gc_async_flush(gc), (gc->limbo || gc->stage_list)) {
-		(void)nanosleep(&dtime, NULL);
+	/*
+	 * Check all epochs and the limbo list.
+	 */
+	done = true;
+	for (unsigned i = 0; i < EBR_EPOCHS; i++) {
+		if (gc->epoch_list[i]) {
+			done = false;
+			break;
+		}
+	}
+	if (!done || gc->limbo) {
+		/*
+		 * There are objects waiting for reclaim.  Spin-wait or
+		 * sleep for a little bit and try to reclaim them.
+		 */
+		if (count < SPINLOCK_BACKOFF_MAX) {
+			SPINLOCK_BACKOFF(count);
+		} else {
+			(void)nanosleep(&dtime, NULL);
+		}
+		goto again;
 	}
 }

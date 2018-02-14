@@ -40,50 +40,31 @@
 #ifndef	_UTILS_H_
 #define	_UTILS_H_
 
-#include <stdbool.h>
-#include <inttypes.h>
+#include <assert.h>
+
 #include <assert.h>
 
 /*
  * A regular assert (debug/diagnostic only).
  */
-#if !defined(ASSERT)
+#if defined(DEBUG)
 #define	ASSERT		assert
+#else
+#define	ASSERT(x)
 #endif
 
 /*
  * Branch prediction macros.
  */
-
 #ifndef __predict_true
 #define	__predict_true(x)	__builtin_expect((x) != 0, 1)
 #define	__predict_false(x)	__builtin_expect((x) != 0, 0)
-#endif
-
-#ifndef __unused
-#define	__unused		__attribute__((__unused__))
-#endif
-
-/*
- * Compile-time assertion: if C11 static_assert() is not available,
- * then emulate it.
- */
-#ifndef static_assert
-#ifndef CTASSERT
-#define	CTASSERT(x)		__CTASSERT99(x, __INCLUDE_LEVEL__, __LINE__)
-#define	__CTASSERT99(x, a, b)	__CTASSERT0(x, __CONCAT(__ctassert,a), \
-					       __CONCAT(_,b))
-#define	__CTASSERT0(x, y, z)	__CTASSERT1(x, y, z)
-#define	__CTASSERT1(x, y, z)	typedef char y ## z[(x) ? 1 : -1] __unused
-#endif
-#define	static_assert(exp, msg)	CTASSERT(exp)
 #endif
 
 /*
  * Atomic operations and memory barriers.  If C11 API is not available,
  * then wrap the GCC builtin routines.
  */
-
 #ifndef atomic_compare_exchange_weak
 #define	atomic_compare_exchange_weak(ptr, expected, desired) \
     __sync_bool_compare_and_swap(ptr, expected, desired)
@@ -91,16 +72,16 @@
 
 #ifndef atomic_exchange
 static inline void *
-atomic_exchange(volatile void *ptr, void *nptr)
+atomic_exchange(volatile void *ptr, void *newval)
 {
-	volatile void * volatile old;
-
-	do {
-		old = *(volatile void * volatile *)ptr;
-	} while (!atomic_compare_exchange_weak(
-	    (volatile void * volatile *)ptr, old, nptr));
-
-	return (void *)(uintptr_t)old; // workaround for gcc warnings
+	void * volatile *ptrp = (void * volatile *)ptr;
+	void *oldval;
+again:
+	oldval = *ptrp;
+	if (!__sync_bool_compare_and_swap(ptrp, oldval, newval)) {
+		goto again;
+	}
+	return oldval;
 }
 #endif
 
@@ -114,5 +95,24 @@ atomic_exchange(volatile void *ptr, void *nptr)
 #define	memory_order_acq_rel	__ATOMIC_ACQ_REL
 #define	atomic_thread_fence(m)	__atomic_thread_fence(m)
 #endif
+
+/*
+ * Exponential back-off for the spinning paths.
+ */
+#define	SPINLOCK_BACKOFF_MIN	4
+#define	SPINLOCK_BACKOFF_MAX	128
+#if defined(__x86_64__) || defined(__i386__)
+#define SPINLOCK_BACKOFF_HOOK	__asm volatile("pause" ::: "memory")
+#else
+#define SPINLOCK_BACKOFF_HOOK
+#endif
+#define	SPINLOCK_BACKOFF(count)					\
+do {								\
+	for (int __i = (count); __i != 0; __i--) {		\
+		SPINLOCK_BACKOFF_HOOK;				\
+	}							\
+	if ((count) < SPINLOCK_BACKOFF_MAX)			\
+		(count) += (count);				\
+} while (/* CONSTCOND */ 0);
 
 #endif

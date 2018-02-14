@@ -12,8 +12,16 @@ CFLAGS+=	-Wshadow -Wcast-qual -Wcast-align -Wwrite-strings
 CFLAGS+=	-Wold-style-definition
 #CFLAGS+=	-Wsuggest-attribute=noreturn -Wjump-misses-init
 
+ifeq ($(MAKECMDGOALS),tests)
+DEBUG=		1
+endif
+
+ifeq ($(MAKECMDGOALS),stress)
+DEBUG=		1
+endif
+
 ifeq ($(DEBUG),1)
-CFLAGS+=	-O1 -DDEBUG -fno-omit-frame-pointer
+CFLAGS+=	-Og -DDEBUG -fno-omit-frame-pointer
 else
 CFLAGS+=	-DNDEBUG
 endif
@@ -47,6 +55,10 @@ install: $(addprefix install/,$(LIB).la)
 	mkdir -p $(IINCDIR) && install -c $(INCS) $(IINCDIR)
 	#mkdir -p $(IMANDIR) && install -c $(MANS) $(IMANDIR)
 
+tests: $(OBJS) t_gc.o
+	$(CC) $(CFLAGS) $^ -o t_gc -lpthread
+	./t_gc
+
 stress: $(OBJS) t_stress.o
 	$(CC) $(CFLAGS) $^ -o t_stress $(LDFLAGS) -lpthread
 
@@ -54,4 +66,4 @@ clean:
 	libtool --mode=clean rm
 	@ rm -rf .libs *.o *.lo *.la t_stress
 
-.PHONY: all obj lib install stress clean
+.PHONY: all obj lib install tests stress clean

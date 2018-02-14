@@ -16,16 +16,20 @@ typedef struct gc_entry {
 	struct gc_entry *next;
 } gc_entry_t;
 
+typedef void (*gc_func_t)(gc_t *, gc_entry_t *);
+
 __BEGIN_DECLS
 
-gc_t *	gc_create(void (*)(gc_entry_t *));
+gc_t *	gc_create(gc_func_t, unsigned);
 void	gc_destroy(gc_t *);
 void	gc_register(gc_t *);
-void	gc_checkpoint(gc_t *);
+
+void	gc_crit_enter(gc_t *);
+void	gc_crit_exit(gc_t *);
 
 void	gc_limbo(gc_t *, gc_entry_t *);
-void	gc_async_flush(gc_t *);
-void	gc_full_flush(gc_t *, unsigned);
+void	gc_cycle(gc_t *);
+void	gc_full(gc_t *, unsigned);
 
 __END_DECLS
 

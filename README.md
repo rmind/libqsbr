@@ -2,22 +2,24 @@
 
 [![Build Status](https://travis-ci.org/rmind/libqsbr.svg?branch=master)](https://travis-ci.org/rmind/libqsbr)
 
-Quiescent-State-Based Reclamation (QSBR) and Epoch-Based Reclamation (EBR)
-are synchronisation mechanisms which can be used for efficient memory
-reclamation (garbage collection) in multi-threaded environment.
-Conceptually they are very similar to the read-copy-update (RCU) mechanism.
+Epoch-Based Reclamation (EBR) and Quiescent-State-Based Reclamation (QSBR)
+are synchronisation mechanisms which can be used for efficient memory/object
+reclamation (garbage collection) in concurrent environment.  Conceptually
+they are very similar to the read-copy-update (RCU) mechanism.
 
-QSBR is simpler, more lightweight and faster than RCU.  However, unlike RCU,
-it requires *each* thread to register and manually indicate the quiescent
-state i.e. threads must periodically pass a checkpoint.  In practice, many
-applications can easily do that.  As a more convenient alternative, EBR
-allows user to mark the critical code paths without the need to periodically
-indicate the quiescent state.  It is slightly slower than QSBR due to the
-need to issue a memory barrier on the reader side.
+EBR and QSBR are simpler, more lightweight and often faster than RCU.
+However, each thread must register itself when using these mechanisms.
+EBR allows user to mark the critical code paths without the need to
+periodically indicate the quiescent state.  It is slightly slower than
+QSBR due to the need to issue a memory barrier on the reader side.
+QSBR is more lightweight, but each thread must manually indicate the
+quiescent state i.e. threads must periodically pass a checkpoint where
+they call a dedicated function.  In many applications, such approach
+can be practical.
 
-A typical use case of the QSBR or EBR would be together with lock-free data
-structures.  This library provides a raw QSBR and EBR mechanisms as well as
-a higher level a garbage collection (GC) interface based on QSBR.
+A typical use case of the EBR or QSBR would be together with lock-free
+data structures.  This library provides raw EBR and QSBR mechanisms as
+well as a higher level a garbage collection (GC) interface based on EBR.
 
 The implementation is written in C11 and distributed under the
 2-clause BSD license.
@@ -67,6 +69,52 @@ The implementation is written in C11 and distributed under the
   Note that these two functions would typically require the same form
   of serialisation.
 
+## G/C API
+
+* `gc_t *gc_create(gc_func_t reclaim, unsigned obj_off)`
+  * Construct a new G/C management object.  A custom `reclaim` function
+  can be passed for object destruction.  This function must process a list
+  of objects, embedding `gc_entry_t` structure which is used for a form a
+  list.  If _reclaim_ is NULL, then a default reclaim functions is used
+  which call `free(3)` for each object.  Additionally, when the default
+  reclaim function is used, the `obj_off` value will be used to decrement
+  the pointer value before freeing the object; typically, this would be
+  `offsetof(struct obj, gc_entry)` i.e. offset of the embedded G/C entry
+  structure in the user object.
+
+* `void gc_destroy(gc_t *gc)`
+  * Destroy the G/C management object.
+
+* `void gc_register(gc_t *gc)`
+  * Register the current thread for G/C management.
+
+* `void gc_crit_enter(gc_t *gc)`
+  * Enter the critical path where objects would be referenced.  This
+  prevents the G/C mechanism from reclaiming (destroying) the object.
+
+* `void gc_crit_exit(gc_t *gc)`
+  * Exit the critical path, indicating that the target objects no
+  longer have active references and the G/C mechanism may consider
+  them for reclamation.
+
+* `void gc_limbo(gc_t *gc, gc_entry_t *entry)`
+  * Insert the object (referenced via its G/C entry structure) into a
+  "limbo" list, staging it for reclamation (destruction).  This is a
+  request to reclaim the object once it is guaranteed that there are
+  no threads referencing it in the critical path.
+
+* `void gc_cycle(gc_t *gc)`
+  * Run a G/C cycle, attempting to reclaim some objects which were
+  added to the limbo list.  The objects which are no longer referenced
+  may are not guaranteed to be reclaimed immediately after one cycle.
+  This function does not block and is expected to be called periodically
+  for an incremental object reclamation.
+
+* `void gc_full(gc_t *gc, unsigned msec_retry)`
+  * Run a full G/C in order to ensure that all staged objects have been
+  reclaimed.  This function will block for `msec_retry` milliseconds before
+  trying again, if there are objects which cannot be reclaimed immediately.
+
 ## Notes
 
 The implementation was extensively tested on a 24-core x86 machine,
@@ -79,74 +127,61 @@ thread.  It takes a reclaim function.
 ```c
 static gc_t *	gc;
 
-static void
-obj_reclaim(gc_entry_t *entry)
-{
-	/*
-	 * Note: a list of entries is passed to the reclaim function.
-	 */
-	while (entry) {
-		obj_t *obj;
-
-		/* Destroy the actual object; at this point it is safe. */
-		obj = (obj_t *)((uintptr_t)entry - offsetof(obj_t, gc_entry));
-		entry = entry->next;
-		free(obj);
-	}
-}
-
 void
 some_sysinit(void)
 {
-	gc = gc_create(obj_reclaim);
+	gc = gc_create(NULL, offsetof(obj_t, gc_entry));
 	assert(gc != NULL);
 	...
 }
 ```
 
-Each thread which can reference an object must register:
+An example code fragment of a reader thread:
 ```c
-static void *
-worker_thread(void *arg)
-{
 	gc_register(gc);
 
 	while (!exit) {
 		/*
-		 * Some processing referencing the objects..
+		 * Some processing referencing the objects.  The readers
+		 * must indicate the critical path where they actively
+		 * reference any objects.
 		 */
-		...
-
-		/*
-		 * Checkpoint: indicate that the thread is in the
-		 * quiescient state -- at this point, we no longer
-		 * actively reference any objects.  This is cheap
-		 * and can be invoked more frequently.
-		 */
-		gc_checkpoint(gc);
-
-		/*
-		 * Perform an asynchronous flush: attempt to reclaim the
-		 * objects previously added to the list; if they are not
-		 * ready to be reclaimed - the function just returns, so
-		 * the flush should be invoked periodically.
-		 */
-		gc_async_flush(gc);
+		gc_crit_enter(gc);
+		obj = some_lookup();
+		some_access(obj);
+		gc_crit_exit(gc);
 	}
-	pthread_exit(NULL);
 }
 ```
 
 Here is an example code fragment in the worker thread which illustrates
 how the object would be staged for destruction (reclamation):
 ```c
-	foreach key in key_list {
-		/*
-		 * Remove the object from the lock-free container.  The
-		 * object is no longer globally visible.  Add the object
-		 * to the G/C limbo list (to be flushed later).
-		 */
-		obj = lockfree_remove(container, key);
-		gc_limbo(gc, obj->gc_entry);
-	}
+	/*
+	 * Remove the object from the lock-free container.  The
+	 * object is no longer globally visible.  Add the object
+	 * to the G/C limbo list (to be flushed later).
+	 */
+	obj = lockfree_remove(container, key);
+	gc_limbo(gc, obj->gc_entry);
+
+	...
+
+	/*
+	 * Checkpoint: run a G/C cycle, attempting to reclaim *some*
+	 * objects previously added to the limbo list.  This should be
+	 * called periodically, for incremental object reclamation.
+	 *
+	 * WARNING: Any gc_cycle() calls must be serialised (using a
+	 * mutex or by running in a single-threaded manner).
+	 */
+	gc_cycle(gc);
+
+	...
+
+	/*
+	 * Eventually, a full G/C might have to be performed to ensure
+	 * that all objects have been reclaimed.  This call can block.
+	 */
+	gc_full(gc, 1); // sleep for 1 msec before re-checking
 ```
