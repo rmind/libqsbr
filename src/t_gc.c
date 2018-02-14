@@ -21,7 +21,7 @@ typedef struct {
 } obj_t;
 
 static void
-free_objs(gc_t *gc, gc_entry_t *entry)
+free_objs(gc_entry_t *entry, void *arg)
 {
 	while (entry) {
 		obj_t *obj;
@@ -31,7 +31,7 @@ free_objs(gc_t *gc, gc_entry_t *entry)
 
 		obj->destroyed = true;
 	}
-	(void)gc;
+	(void)arg;
 }
 
 static void
@@ -40,7 +40,7 @@ test_basic(void)
 	gc_t *gc;
 	obj_t obj;
 
-	gc = gc_create(free_objs, 0);
+	gc = gc_create(offsetof(obj_t, entry), free_objs, NULL);
 	assert(gc != NULL);
 
 	/*
@@ -56,7 +56,7 @@ test_basic(void)
 	memset(&obj, 0, sizeof(obj));
 	assert(!obj.destroyed);
 
-	gc_limbo(gc, &obj.entry);
+	gc_limbo(gc, &obj);
 	gc_cycle(gc);
 	assert(obj.destroyed);
 
@@ -66,7 +66,7 @@ test_basic(void)
 	memset(&obj, 0, sizeof(obj));
 	assert(!obj.destroyed);
 
-	gc_limbo(gc, &obj.entry);
+	gc_limbo(gc, &obj);
 	gc_cycle(gc);
 	assert(obj.destroyed);
 
@@ -76,7 +76,7 @@ test_basic(void)
 	memset(&obj, 0, sizeof(obj));
 	assert(!obj.destroyed);
 
-	gc_limbo(gc, &obj.entry);
+	gc_limbo(gc, &obj);
 	assert(!obj.destroyed);
 
 	gc_crit_enter(gc);
@@ -93,7 +93,7 @@ test_basic(void)
 	memset(&obj, 0, sizeof(obj));
 	assert(!obj.destroyed);
 
-	gc_limbo(gc, &obj.entry);
+	gc_limbo(gc, &obj);
 	gc_full(gc, 1);
 	assert(obj.destroyed);
 

@@ -6,8 +6,10 @@
  */
 
 #include <stdio.h>
+#include <stddef.h>
 #include <stdlib.h>
 #include <stdbool.h>
+#include <inttypes.h>
 #include <signal.h>
 #include <unistd.h>
 #include <string.h>
@@ -16,6 +18,8 @@
 #include <err.h>
 
 #include "ebr.h"
+#include "qsbr.h"
+#include "gc.h"
 #include "utils.h"
 
 static unsigned			nsec = 10; /* seconds */
@@ -30,8 +34,8 @@ typedef struct {
 	unsigned int *		ptr;
 	unsigned int		visible;
 	unsigned int		gc_epoch;
-	char			_pad[
-	    CACHE_LINE_SIZE - (sizeof(unsigned int *) + sizeof(int) * 2)];
+	gc_entry_t		gc_entry;
+	char			_pad[CACHE_LINE_SIZE - 8 - 4 - 4 - 8];
 } data_struct_t;
 
 #define	DS_COUNT		4
@@ -39,9 +43,48 @@ typedef struct {
 #define	EPOCH_OFF		EBR_EPOCHS
 
 static unsigned			magic_val = MAGIC_VAL;
+
 static ebr_t *			ebr;
+static qsbr_t *			qsbr;
+static gc_t *			gc;
+
 static data_struct_t		ds[DS_COUNT]
     __attribute__((__aligned__(CACHE_LINE_SIZE)));
+
+static void
+access_obj(data_struct_t *obj)
+{
+	if (obj->visible && *obj->ptr != MAGIC_VAL) {
+		abort();
+	}
+}
+
+static void
+mock_insert_obj(data_struct_t *obj)
+{
+	obj->ptr = &magic_val;
+	atomic_thread_fence(memory_order_release);
+
+	assert(!obj->visible);
+	obj->visible = true;
+}
+
+static void
+mock_remove_obj(data_struct_t *obj)
+{
+	assert(obj->visible);
+	obj->visible = false;
+}
+
+static void
+mock_destroy_obj(data_struct_t *obj)
+{
+	obj->ptr = NULL;
+}
+
+/*
+ * EBR stress test.
+ */
 
 static void
 ebr_writer(unsigned target)
@@ -54,8 +97,7 @@ ebr_writer(unsigned target)
 		 * The data structure is visible.  First, ensure it is no
 		 * longer visible (think of "remove" semantics).
 		 */
-		assert(obj->visible);
-		obj->visible = false;
+		mock_remove_obj(obj);
 		obj->gc_epoch = EBR_EPOCHS + ebr_pending_epoch(ebr);
 
 	} else if (!obj->gc_epoch) {
@@ -63,11 +105,7 @@ ebr_writer(unsigned target)
 		 * Data structure is not globally visible.  Set the value
 		 * and make it visible (think of the "insert" semantics).
 		 */
-		obj->ptr = &magic_val;
-		atomic_thread_fence(memory_order_release);
-
-		assert(!obj->visible);
-		obj->visible = true;
+		mock_insert_obj(obj);
 	} else {
 		/* Invisible, but not yet reclaimed. */
 		assert(obj->gc_epoch != 0);
@@ -77,7 +115,7 @@ ebr_writer(unsigned target)
 
 	for (unsigned i = 0; i < DS_COUNT; i++) {
 		if (obj->gc_epoch == EPOCH_OFF + epoch) {
-			obj->ptr = NULL;
+			mock_destroy_obj(obj);
 			obj->gc_epoch = 0;
 		}
 	}
@@ -118,15 +156,133 @@ ebr_stress(void *arg)
 		 * in the following pointer dereference.
 		 */
 		ebr_enter(ebr);
-		if (ds[n].visible && *ds[n].ptr != MAGIC_VAL) {
-			abort();
-		}
+		access_obj(&ds[n]);
 		ebr_exit(ebr);
 	}
 	pthread_barrier_wait(&barrier);
 	pthread_exit(NULL);
 	return NULL;
 }
+
+/*
+ * QSBR stress test.
+ */
+
+static void
+qsbr_writer(unsigned target)
+{
+	data_struct_t *obj = &ds[target];
+
+	/*
+	 * See the ebr_writer() function for more details.
+	 */
+	if (obj->visible) {
+		unsigned count = SPINLOCK_BACKOFF_MIN;
+		qsbr_epoch_t target_epoch;
+
+		mock_remove_obj(obj);
+
+		/* QSBR synchronisation barrier. */
+		target_epoch = qsbr_barrier(qsbr);
+		while (!qsbr_sync(qsbr, target_epoch)) {
+			SPINLOCK_BACKOFF(count);
+		}
+
+		/* It is safe to "destroy" the object now. */
+		mock_destroy_obj(obj);
+	} else {
+		mock_insert_obj(obj);
+	}
+}
+
+static void *
+qsbr_stress(void *arg)
+{
+	const unsigned id = (uintptr_t)arg;
+	unsigned n = 0;
+
+	/*
+	 * See the ebr_stress() function for explanation.
+	 */
+
+	qsbr_register(qsbr);
+	pthread_barrier_wait(&barrier);
+	while (!stop) {
+		n = ++n & (DS_COUNT - 1);
+		if (id == 0) {
+			qsbr_writer(n);
+			continue;
+		}
+		access_obj(&ds[n]);
+		qsbr_checkpoint(qsbr);
+	}
+	pthread_barrier_wait(&barrier);
+	pthread_exit(NULL);
+	return NULL;
+}
+
+/*
+ * G/C stress test.
+ */
+
+static void
+gc_func(gc_entry_t *entry, void *arg)
+{
+	const unsigned off = offsetof(data_struct_t, gc_entry);
+
+	while (entry) {
+		data_struct_t *obj;
+
+		obj = (void *)((uintptr_t)entry - off);
+		entry = entry->next;
+		mock_destroy_obj(obj);
+	}
+}
+
+static void
+gc_writer(unsigned target)
+{
+	data_struct_t *obj = &ds[target];
+
+	if (obj->visible) {
+		mock_remove_obj(obj);
+		gc_limbo(gc, obj);
+	} else if (!obj->ptr) {
+		mock_insert_obj(obj);
+	}
+	gc_cycle(gc);
+}
+
+static void *
+gc_stress(void *arg)
+{
+	const unsigned id = (uintptr_t)arg;
+	unsigned n = 0;
+
+	/*
+	 * See the ebr_stress() function for explanation.
+	 */
+
+	gc_register(gc);
+	pthread_barrier_wait(&barrier);
+	while (!stop) {
+		n = ++n & (DS_COUNT - 1);
+		if (id == 0) {
+			gc_writer(n);
+			continue;
+		}
+		gc_crit_enter(gc);
+		access_obj(&ds[n]);
+		gc_crit_exit(gc);
+	}
+	pthread_barrier_wait(&barrier);
+	pthread_exit(NULL);
+	return NULL;
+}
+
+/*
+ * Helper routines
+ */
 
 static void
 ding(int sig)
@@ -145,7 +301,7 @@ run_test(void *func(void *))
 	/*
 	 * Setup the threads.
 	 */
-	nworkers = sysconf(_SC_NPROCESSORS_CONF) + 1;
+	nworkers = sysconf(_SC_NPROCESSORS_CONF);
 	thr = calloc(nworkers, sizeof(pthread_t));
 	pthread_barrier_init(&barrier, NULL, nworkers);
 	stop = false;
@@ -160,6 +316,8 @@ run_test(void *func(void *))
 	 */
 	memset(&ds, 0, sizeof(ds));
 	ebr = ebr_create();
+	qsbr = qsbr_create();
+	gc = gc_create(offsetof(data_struct_t, gc_entry), gc_func, NULL);
 
 	/*
 	 * Spin the test.
@@ -176,7 +334,12 @@ run_test(void *func(void *))
 		pthread_join(thr[i], NULL);
 	}
 	pthread_barrier_destroy(&barrier);
+
 	ebr_destroy(ebr);
+	qsbr_destroy(qsbr);
+
+	gc_full(gc, 1);
+	gc_destroy(gc);
 }
 
 int
@@ -187,6 +350,8 @@ main(int argc, char **argv)
 	}
 	puts("stress test");
 	run_test(ebr_stress);
+	run_test(qsbr_stress);
+	run_test(gc_stress);
 	puts("ok");
 	return 0;
 }

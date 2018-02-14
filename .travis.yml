@@ -7,4 +7,4 @@ compiler:
   - gcc
   - clang
 
-script: cd src && make obj
+script: cd src && make tests

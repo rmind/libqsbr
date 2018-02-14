@@ -6,8 +6,8 @@
  */
 
 /*
- * Garbage collection (GC) interface using the quiescent state based
- * reclamation (QSBR) mechanism.
+ * Garbage Collection (G/C) interface for multi-threaded environment,
+ * using the Epoch-based reclamation (EBR) mechanism.
  */
 
 #include <stdio.h>
@@ -38,14 +38,16 @@ struct gc {
 	 * EBR object and the reclamation function.
 	 */
 	ebr_t *		ebr;
+	unsigned	entry_off;
 	gc_func_t	reclaim;
-	unsigned	obj_off;
+	void *		arg;
 };
 
 static void
-gc_default_reclaim(gc_t *gc, gc_entry_t *entry)
+gc_default_reclaim(gc_entry_t *entry, void *arg)
 {
-	const unsigned off = gc->obj_off;
+	gc_t *gc = arg;
+	const unsigned off = gc->entry_off;
 	void *obj;
 
 	while (entry) {
@@ -56,7 +58,7 @@ gc_default_reclaim(gc_t *gc, gc_entry_t *entry)
 }
 
 gc_t *
-gc_create(gc_func_t reclaim, unsigned off)
+gc_create(unsigned off, gc_func_t reclaim, void *arg)
 {
 	gc_t *gc;
 
@@ -68,8 +70,14 @@ gc_create(gc_func_t reclaim, unsigned off)
 		free(gc);
 		return NULL;
 	}
-	gc->reclaim = reclaim ? reclaim : gc_default_reclaim;
-	gc->obj_off = off;
+	gc->entry_off = off;
+	if (reclaim) {
+		gc->reclaim = reclaim;
+		gc->arg = arg;
+	} else {
+		gc->reclaim = gc_default_reclaim;
+		gc->arg = gc;
+	}
 	return gc;
 }
 
@@ -103,14 +111,15 @@ gc_crit_exit(gc_t *gc)
 	ebr_exit(gc->ebr);
 }
 
+/*
+ * gc_limbo: insert into the limbo list.
+ */
 void
-gc_limbo(gc_t *gc, gc_entry_t *ent)
+gc_limbo(gc_t *gc, void *obj)
 {
+	gc_entry_t *ent = (void *)((uintptr_t)obj + gc->entry_off);
 	gc_entry_t *head;
 
-	/*
-	 * Insert into the limbo list.
-	 */
 	do {
 		head = gc->limbo;
 		ent->next = head;
@@ -151,7 +160,7 @@ next:
 		 */
 		goto next;
 	}
-	gc->reclaim(gc, gc_list);
+	gc->reclaim(gc_list, gc->arg);
 	gc->epoch_list[gc_epoch] = NULL;
 }
 

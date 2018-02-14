@@ -64,6 +64,6 @@ stress: $(OBJS) t_stress.o
 
 clean:
 	libtool --mode=clean rm
-	@ rm -rf .libs *.o *.lo *.la t_stress
+	@ rm -rf .libs *.o *.lo *.la t_gc t_stress
 
 .PHONY: all obj lib install tests stress clean
