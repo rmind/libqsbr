@@ -50,10 +50,12 @@ static gc_t *			gc;
 
 static data_struct_t		ds[DS_COUNT]
     __attribute__((__aligned__(CACHE_LINE_SIZE)));
+static uint64_t			destructions;
 
 static void
 access_obj(data_struct_t *obj)
 {
+	atomic_thread_fence(memory_order_acquire);
 	if (obj->visible && *obj->ptr != MAGIC_VAL) {
 		abort();
 	}
@@ -64,7 +66,6 @@ mock_insert_obj(data_struct_t *obj)
 {
 	obj->ptr = &magic_val;
 	atomic_thread_fence(memory_order_release);
-
 	assert(!obj->visible);
 	obj->visible = true;
 }
@@ -80,6 +81,7 @@ static void
 mock_destroy_obj(data_struct_t *obj)
 {
 	obj->ptr = NULL;
+	destructions++;
 }
 
 /*
@@ -98,7 +100,7 @@ ebr_writer(unsigned target)
 		 * longer visible (think of "remove" semantics).
 		 */
 		mock_remove_obj(obj);
-		obj->gc_epoch = EBR_EPOCHS + ebr_pending_epoch(ebr);
+		obj->gc_epoch = EBR_EPOCHS + ebr_staging_epoch(ebr);
 
 	} else if (!obj->gc_epoch) {
 		/*
@@ -186,6 +188,13 @@ qsbr_writer(unsigned target)
 		target_epoch = qsbr_barrier(qsbr);
 		while (!qsbr_sync(qsbr, target_epoch)) {
 			SPINLOCK_BACKOFF(count);
+			if (stop) {
+				/*
+				 * Other threads might have exited and
+				 * the checkpoint would never be passed.
+				 */
+				return;
+			}
 		}
 
 		/* It is safe to "destroy" the object now. */
@@ -318,6 +327,7 @@ run_test(void *func(void *))
 	ebr = ebr_create();
 	qsbr = qsbr_create();
 	gc = gc_create(offsetof(data_struct_t, gc_entry), gc_func, NULL);
+	destructions = 0;
 
 	/*
 	 * Spin the test.
@@ -334,6 +344,7 @@ run_test(void *func(void *))
 		pthread_join(thr[i], NULL);
 	}
 	pthread_barrier_destroy(&barrier);
+	printf("# %"PRIu64"\n", destructions);
 
 	ebr_destroy(ebr);
 	qsbr_destroy(qsbr);

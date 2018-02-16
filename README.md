@@ -53,21 +53,22 @@ The implementation is written in C11 and distributed under the
   `EBR_EPOCHS` constant and the epoch value is `0 <= epoch < EBR_EPOCHS`.
   Note: the synchronisation points must be serialised (e.g. if there
   are multiple G/C workers or other writers); typically, calls to the
-  `ebr_pending_epoch` and `ebr_gc_epoch` would be a part of the same
+  `ebr_staging_epoch` and `ebr_gc_epoch` would be a part of the same
   serialised path.
 
-* `unsigned ebr_pending_epoch(ebr_t *ebr)`
-  * Returns an _epoch_ pending for reclamation.  This can be used as
-  reference value for the pending queue/tag, used to postpone the
-  reclamation until this epoch becomes available for G/C.  Note that
-  this function would typically be serialised together with the
-  `ebr_sync` calls.
+* `unsigned ebr_staging_epoch(ebr_t *ebr)`
+  * Returns an _epoch_ where objects can be staged for for reclamation.
+  This can be used as reference value for the pending queue/tag, used to
+  postpone the reclamation until this epoch becomes available for G/C.
+  Note that this function would typically be serialised together with
+  the `ebr_sync` calls.
 
 * `unsigned ebr_gc_epoch(ebr_t *ebr)`
-  * Returns the _epoch_ available for reclamation.  The _epoch_ value
-  shall be the same as returned by the last successful `ebr_sync` call.
-  Note that these two functions would typically require the same form
-  of serialisation.
+  * Returns the _epoch_ available for reclamation, i.e. the epoch where
+  it is guaranteed that the objects are safe to be destroyed.  The _epoch_
+  value shall be the same as returned by the last successful `ebr_sync`
+  call.  Note that these two functions would typically require the same
+  form of serialisation.
 
 ## G/C API
 

@@ -22,7 +22,7 @@ int		ebr_register(ebr_t *);
 void		ebr_enter(ebr_t *);
 void		ebr_exit(ebr_t *);
 bool		ebr_sync(ebr_t *, unsigned *);
-unsigned	ebr_pending_epoch(ebr_t *);
+unsigned	ebr_staging_epoch(ebr_t *);
 unsigned	ebr_gc_epoch(ebr_t *);
 
 __END_DECLS

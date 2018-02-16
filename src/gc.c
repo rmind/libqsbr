@@ -138,14 +138,14 @@ next:
 	 * a new epoch.
 	 */
 	if (!ebr_sync(ebr, &gc_epoch)) {
-		/* New epoch was not announced -- not ready reclaim. */
+		/* Not announced -- not ready to reclaim. */
 		return;
 	}
 
 	/*
 	 * Move the objects from the limbo list into the staging epoch.
 	 */
-	staging_epoch = ebr_pending_epoch(ebr);
+	staging_epoch = ebr_staging_epoch(ebr);
 	ASSERT(gc->epoch_list[staging_epoch] == NULL);
 	gc->epoch_list[staging_epoch] = atomic_exchange(&gc->limbo, NULL);
 

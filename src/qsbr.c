@@ -78,9 +78,8 @@ void
 qsbr_unregister(qsbr_t *qs)
 {
 	qsbr_tls_t *t = pthread_getspecific(qs->tls_key);
-
-	free(t);
 	pthread_setspecific(qs->tls_key, NULL);
+	free(t);
 }
 
 void
@@ -126,10 +125,14 @@ qsbr_checkpoint(qsbr_t *qs)
 	t = pthread_getspecific(qs->tls_key);
 	ASSERT(t != NULL);
 
-	/* Observe the current epoch. */
-	atomic_thread_fence(memory_order_release);
+	/*
+	 * Observe the current epoch and issue a load barrier.
+	 *
+	 * Additionally, issue a store barrier, so the callers
+	 * could assume qsbr_checkpoint() being a full barrier.
+	 */
 	t->local_epoch = qs->global_epoch;
-	atomic_thread_fence(memory_order_acquire);
+	atomic_thread_fence(memory_order_acq_rel);
 }
 
 qsbr_epoch_t
