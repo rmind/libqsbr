@@ -124,7 +124,7 @@ ebr_enter(ebr_t *ebr)
 	 * epoch is observed before any loads in the critical path.
 	 */
 	t->local_epoch = ebr->global_epoch | ACTIVE_FLAG;
-	atomic_thread_fence(memory_order_acquire);
+	atomic_thread_fence(memory_order_seq_cst);
 }
 
 /*
@@ -142,7 +142,7 @@ ebr_exit(ebr_t *ebr)
 	 * Clear the "active" flag.  Must ensure that any stores in
 	 * the critical path reach global visibility before that.
 	 */
-	atomic_thread_fence(memory_order_release);
+	atomic_thread_fence(memory_order_seq_cst);
 	ASSERT(t->local_epoch & ACTIVE_FLAG);
 	t->local_epoch = 0;
 }
@@ -165,12 +165,12 @@ ebr_sync(ebr_t *ebr, unsigned *gc_epoch)
 	 * the global visibility.  We want to allow the callers to
 	 * assume that the ebr_sync() call serves as a full barrier.
 	 */
-	atomic_thread_fence(memory_order_acq_rel);
+	epoch = ebr->global_epoch;
+	atomic_thread_fence(memory_order_seq_cst);
 
 	/*
 	 * Check whether all active workers observed the global epoch.
 	 */
-	epoch = ebr->global_epoch;
 	t = ebr->list;
 	while (t) {
 		const unsigned local_epoch = t->local_epoch; // atomic fetch

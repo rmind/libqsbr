@@ -90,9 +90,10 @@ again:
 #endif
 
 #ifndef atomic_thread_fence
-#define	memory_order_acquire	__ATOMIC_ACQUIRE	// load barrier
-#define	memory_order_release	__ATOMIC_RELEASE	// store barrier
+#define	memory_order_acquire	__ATOMIC_ACQUIRE
+#define	memory_order_release	__ATOMIC_RELEASE
 #define	memory_order_acq_rel	__ATOMIC_ACQ_REL
+#define	memory_order_seq_cst	__ATOMIC_SEQ_CST
 #define	atomic_thread_fence(m)	__atomic_thread_fence(m)
 #endif
 

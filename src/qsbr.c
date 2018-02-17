@@ -128,11 +128,12 @@ qsbr_checkpoint(qsbr_t *qs)
 	/*
 	 * Observe the current epoch and issue a load barrier.
 	 *
-	 * Additionally, issue a store barrier, so the callers
-	 * could assume qsbr_checkpoint() being a full barrier.
+	 * Additionally, issue a store barrier before observation,
+	 * so the callers could assume qsbr_checkpoint() being a
+	 * full barrier.
 	 */
+	atomic_thread_fence(memory_order_seq_cst);
 	t->local_epoch = qs->global_epoch;
-	atomic_thread_fence(memory_order_acq_rel);
 }
 
 qsbr_epoch_t

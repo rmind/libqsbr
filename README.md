@@ -24,6 +24,16 @@ well as a higher level a garbage collection (GC) interface based on EBR.
 The implementation is written in C11 and distributed under the
 2-clause BSD license.
 
+References:
+
+	K. Fraser, Practical lock-freedom,
+	Technical Report UCAM-CL-TR-579, February 2004
+	https://www.cl.cam.ac.uk/techreports/UCAM-CL-TR-579.pdf
+
+	T. E. Hart, P. E. McKenney, A.D. Brown,
+	Making Lockless Synchronization Fast: Performance Implications of Memory Reclamation.
+	http://csng.cs.toronto.edu/publication_files/0000/0165/ipdps06.pdf
+
 ## EBR API
 
 * `ebr_t *ebr_create(void)`

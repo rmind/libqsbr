@@ -92,7 +92,7 @@ static void
 ebr_writer(unsigned target)
 {
 	data_struct_t *obj = &ds[target];
-	unsigned epoch;
+	unsigned gc_epoch;
 
 	if (obj->visible) {
 		/*
@@ -113,10 +113,10 @@ ebr_writer(unsigned target)
 		assert(obj->gc_epoch != 0);
 	}
 
-	ebr_sync(ebr, &epoch);
+	ebr_sync(ebr, &gc_epoch);
 
 	for (unsigned i = 0; i < DS_COUNT; i++) {
-		if (obj->gc_epoch == EPOCH_OFF + epoch) {
+		if (obj->gc_epoch == EPOCH_OFF + gc_epoch) {
 			mock_destroy_obj(obj);
 			obj->gc_epoch = 0;
 		}
