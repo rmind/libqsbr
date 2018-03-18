@@ -32,6 +32,7 @@ References:
 
 	T. E. Hart, P. E. McKenney, A.D. Brown,
 	Making Lockless Synchronization Fast: Performance Implications of Memory Reclamation.
+	Parallel and Distributed Processing Symposium, April 2006.
 	http://csng.cs.toronto.edu/publication_files/0000/0165/ipdps06.pdf
 
 ## EBR API

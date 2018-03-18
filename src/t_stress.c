@@ -140,7 +140,7 @@ ebr_stress(void *arg)
 
 	pthread_barrier_wait(&barrier);
 	while (!stop) {
-		n = ++n & (DS_COUNT - 1);
+		n = (n + 1) & (DS_COUNT - 1);
 
 		if (id == 0) {
 			ebr_writer(n);
@@ -217,7 +217,7 @@ qsbr_stress(void *arg)
 	qsbr_register(qsbr);
 	pthread_barrier_wait(&barrier);
 	while (!stop) {
-		n = ++n & (DS_COUNT - 1);
+		n = (n + 1) & (DS_COUNT - 1);
 		if (id == 0) {
 			qsbr_writer(n);
 			continue;
@@ -246,6 +246,7 @@ gc_func(gc_entry_t *entry, void *arg)
 		entry = entry->next;
 		mock_destroy_obj(obj);
 	}
+	(void)arg;
 }
 
 static void
@@ -275,7 +276,7 @@ gc_stress(void *arg)
 	gc_register(gc);
 	pthread_barrier_wait(&barrier);
 	while (!stop) {
-		n = ++n & (DS_COUNT - 1);
+		n = (n + 1) & (DS_COUNT - 1);
 		if (id == 0) {
 			gc_writer(n);
 			continue;
