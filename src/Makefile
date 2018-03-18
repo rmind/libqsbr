@@ -66,6 +66,7 @@ tests: $(OBJS) t_gc.o
 
 stress: $(OBJS) t_stress.o
 	$(CC) $(CFLAGS) $^ -o t_stress $(LDFLAGS) -lpthread
+	./t_stress
 
 clean:
 	libtool --mode=clean rm
