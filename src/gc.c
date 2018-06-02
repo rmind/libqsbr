@@ -168,7 +168,7 @@ void
 gc_full(gc_t *gc, unsigned msec_retry)
 {
 	const struct timespec dtime = { 0, msec_retry * 1000 * 1000 };
-	unsigned n, count = SPINLOCK_BACKOFF_MIN;
+	unsigned count = SPINLOCK_BACKOFF_MIN;
 	bool done;
 again:
 	/*

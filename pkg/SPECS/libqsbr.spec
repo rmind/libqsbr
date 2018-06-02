@@ -1,7 +1,9 @@
+%define version	%(cat %{_topdir}/version.txt)
+
 Name:		libqsbr
-Version:	1.0
+Version:	%{version}
 Release:	1%{?dist}
-Summary:	QSBR-based reclamation library
+Summary:	EBR and QSBR based reclamation library
 Group:		System Environment/Libraries
 License:	BSD
 URL:		https://github.com/rmind/libqsbr
@@ -11,11 +13,10 @@ BuildRequires:	make
 BuildRequires:	libtool
 
 %description
-QSBR is a synchronisation mechanism which can be used for efficient
-memory reclamation (garbage collection) in multi-threaded environment.
-A typical use case of the QSBR mechanism would be together with lock-free
-data structures.  This library provides a raw QSBR interface and a garbage
-collection (GC) interface based on QSBR.
+Epoch-Based Reclamation (EBR) and Quiescent-State-Based Reclamation (QSBR)
+are synchronisation mechanisms which can be used for efficient memory/object
+reclamation (garbage collection) in concurrent environment.  Conceptually
+they are very similar to the read-copy-update (RCU) mechanism.
 
 %prep
 %setup -q -n src

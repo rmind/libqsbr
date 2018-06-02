@@ -2,7 +2,9 @@
 # This file is in the Public Domain.
 #
 
-CFLAGS=		-std=c11 -O2 -g -W -Wextra -Werror
+PROJ=		qsbr
+
+CFLAGS+=	-std=c11 -O2 -g -Wall -Wextra -Werror
 CFLAGS+=	-D_POSIX_C_SOURCE=200809L
 CFLAGS+=	-D_GNU_SOURCE -D_DEFAULT_SOURCE
 
@@ -26,17 +28,17 @@ DEBUG=		1
 endif
 
 ifeq ($(DEBUG),1)
-CFLAGS+=	-Og -ggdb -fno-omit-frame-pointer -DDEBUG
+CFLAGS+=	-Og -DDEBUG -fno-omit-frame-pointer
 else
 CFLAGS+=	-DNDEBUG
 endif
 
-LIB=		libqsbr
+LIB=		lib$(PROJ)
 INCS=		ebr.h qsbr.h gc.h
 
 OBJS=		ebr.o qsbr.o gc.o
 
-$(LIB).la:	LDFLAGS+=	-rpath $(LIBDIR)
+$(LIB).la:	LDFLAGS+=	-rpath $(LIBDIR) -version-info 1:0:0
 install/%.la:	ILIBDIR=	$(DESTDIR)/$(LIBDIR)
 install:	IINCDIR=	$(DESTDIR)/$(INCDIR)/qsbr
 #install:	IMANDIR=	$(DESTDIR)/$(MANDIR)/man3/

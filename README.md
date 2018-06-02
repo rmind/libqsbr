@@ -208,3 +208,4 @@ how the object would be staged for destruction (reclamation):
 Just build the package, install it and link the library using the
 `-lqsbr` flag.
 * RPM (tested on RHEL/CentOS 7): `cd pkg && make rpm`
+* DEB (tested on Debian 9): `cd pkg && make deb`

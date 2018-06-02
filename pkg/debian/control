@@ -1,0 +1,34 @@
+Source: qsbr
+Priority: extra
+Maintainer: https://github.com/rmind
+Build-Depends:
+ debhelper (>= 9),
+ make,
+ libtool
+Standards-Version: 3.9.1
+Homepage: https://github.com/rmind/qsbr
+License: BSD-2-clause
+
+Package: libqsbr1
+Section: lib
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: EBR and QSBR based reclamation library
+ Epoch-Based Reclamation (EBR) and Quiescent-State-Based Reclamation (QSBR)
+ are synchronisation mechanisms which can be used for efficient memory/object
+ reclamation (garbage collection) in concurrent environment.  Conceptually
+ they are very similar to the read-copy-update (RCU) mechanism.
+
+Package: libqsbr1-dbg
+Section: debug
+Architecture: any
+Depends: ${misc:Depends}, libqsbr1 (= ${binary:Version})
+Description: Debug symbols for libqsbr1
+ Debug symbols for libqsbr1.
+
+Package: libqsbr-dev
+Section: libdevel
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}, libqsbr1 (= ${binary:Version})
+Description: Development files for libqsbr1
+ Development files for libqsbr1.
