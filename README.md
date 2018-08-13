@@ -44,42 +44,44 @@ References:
   * Destroy the EBR object.
 
 * `int ebr_register(ebr_t *ebr)`
-  * Register the current thread for EBR synchronisation (typically,
-  as a reader).  Returns zero on success and -1 on failure.
+  * Register the current thread for EBR synchronisation (normally,
+  as a reader).  Returns 0 on success and -1 on failure.
 
 * `void ebr_enter(ebr_t *ebr)`
   * Mark the entrance to the critical path.  Typically, this would be
   used by the readers when accessing some shared data; reclamation of
-  the objects is guaranteed to not occur in the critical path.
+  objects is guaranteed to not occur in the critical path.
+  * Note: the EBR mechanism is not limited to the concept of "objects".
+  It can be any form of reference to the globally shared data.
 
 * `void ebr_exit(ebr_t *ebr)`
-  * Mark the exist of the critical path.  Typically, after this point,
-  reclamation may occur on some form of reference on shared data is
-  acquired by the reader.
+  * Mark the exit of the critical path.  Reclamation of the shared data
+  may occur after this point.
 
 * `bool ebr_sync(ebr_t *ebr, unsigned *gc_epoch)`
-  * Attempt to synchronise and announce a new epoch.  If a new epoch
-  is announced, returns `true`.  In any case, the _epoch_ available for
-  reclamation is returned.  The number of epochs is defined by the
-  `EBR_EPOCHS` constant and the epoch value is `0 <= epoch < EBR_EPOCHS`.
-  Note: the synchronisation points must be serialised (e.g. if there
-  are multiple G/C workers or other writers); typically, calls to the
+  * Attempt to synchronise and announce a new epoch.  Returns `true` if
+  a new epoch is announced and `false` otherwise.  In either case, the
+  _epoch_ available for reclamation is returned.  The number of epochs is
+  defined by the `EBR_EPOCHS` constant and the epoch value is
+  `0 <= epoch < EBR_EPOCHS`.
+  * The synchronisation points must be serialised (e.g. if there are
+  multiple G/C workers or other writers).  Generally, calls to
   `ebr_staging_epoch` and `ebr_gc_epoch` would be a part of the same
   serialised path.
 
 * `unsigned ebr_staging_epoch(ebr_t *ebr)`
-  * Returns an _epoch_ where objects can be staged for for reclamation.
-  This can be used as reference value for the pending queue/tag, used to
-  postpone the reclamation until this epoch becomes available for G/C.
-  Note that this function would typically be serialised together with
+  * Returns an _epoch_ where objects can be staged for reclamation.
+  This can be used as a reference value for the pending queue/tag, used
+  to postpone the reclamation until this epoch becomes available for G/C.
+  Note that this function would normally be serialised together with
   the `ebr_sync` calls.
 
 * `unsigned ebr_gc_epoch(ebr_t *ebr)`
   * Returns the _epoch_ available for reclamation, i.e. the epoch where
   it is guaranteed that the objects are safe to be destroyed.  The _epoch_
-  value shall be the same as returned by the last successful `ebr_sync`
-  call.  Note that these two functions would typically require the same
-  form of serialisation.
+  value will be the same as returned by the last successful `ebr_sync`
+  call.  Note that these two functions would require the same form of
+  serialisation.
 
 ## G/C API
 
@@ -164,7 +166,7 @@ An example code fragment of a reader thread:
 		/*
 		 * Some processing which references the object(s).
 		 * The readers must indicate the critical path where
-		 * they actively reference any objects.
+		 * they actively reference objects.
 		 */
 		gc_crit_enter(gc);
 		obj = object_lookup();
