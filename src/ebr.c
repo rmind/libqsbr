@@ -114,6 +114,7 @@ void
 ebr_enter(ebr_t *ebr)
 {
 	ebr_tls_t *t;
+	unsigned epoch;
 
 	t = pthread_getspecific(ebr->tls_key);
 	ASSERT(t != NULL);
@@ -123,7 +124,8 @@ ebr_enter(ebr_t *ebr)
 	 * epoch (i.e. observe the global epoch).  Ensure that the
 	 * epoch is observed before any loads in the critical path.
 	 */
-	t->local_epoch = ebr->global_epoch | ACTIVE_FLAG;
+	epoch = ebr->global_epoch | ACTIVE_FLAG;
+	atomic_store_explicit(&t->local_epoch, epoch, memory_order_relaxed);
 	atomic_thread_fence(memory_order_seq_cst);
 }
 
@@ -142,9 +144,9 @@ ebr_exit(ebr_t *ebr)
 	 * Clear the "active" flag.  Must ensure that any stores in
 	 * the critical path reach global visibility before that.
 	 */
-	atomic_thread_fence(memory_order_seq_cst);
 	ASSERT(t->local_epoch & ACTIVE_FLAG);
-	t->local_epoch = 0;
+	atomic_thread_fence(memory_order_seq_cst);
+	atomic_store_explicit(&t->local_epoch, 0, memory_order_relaxed);
 }
 
 /*

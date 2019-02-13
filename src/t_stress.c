@@ -55,9 +55,11 @@ static uint64_t			destructions;
 static void
 access_obj(data_struct_t *obj)
 {
-	atomic_thread_fence(memory_order_loads);
-	if (obj->visible && *obj->ptr != MAGIC_VAL) {
-		abort();
+	if (atomic_load_explicit(&obj->visible, memory_order_relaxed)) {
+		atomic_thread_fence(memory_order_acquire);
+		if (*obj->ptr != MAGIC_VAL) {
+			abort();
+		}
 	}
 }
 
@@ -65,9 +67,9 @@ static void
 mock_insert_obj(data_struct_t *obj)
 {
 	obj->ptr = &magic_val;
-	atomic_thread_fence(memory_order_stores);
 	assert(!obj->visible);
-	obj->visible = true;
+	atomic_thread_fence(memory_order_release);
+	atomic_store_explicit(&obj->visible, true, memory_order_relaxed);
 }
 
 static void
