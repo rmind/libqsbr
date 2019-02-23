@@ -122,7 +122,9 @@ ebr_unregister(ebr_t *ebr)
 	ebr_tls_t *t;
 
 	t = pthread_getspecific(ebr->tls_key);
-	ASSERT(t != NULL);
+	if (t == NULL) {
+		return;
+	}
 	pthread_setspecific(ebr->tls_key, NULL);
 
 	pthread_mutex_lock(&ebr->lock);

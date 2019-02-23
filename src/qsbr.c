@@ -122,7 +122,9 @@ qsbr_unregister(qsbr_t *qsbr)
 	qsbr_tls_t *t;
 
 	t = pthread_getspecific(qsbr->tls_key);
-	ASSERT(t != NULL);
+	if (t == NULL) {
+		return;
+	}
 	pthread_setspecific(qsbr->tls_key, NULL);
 
 	pthread_mutex_lock(&qsbr->lock);
