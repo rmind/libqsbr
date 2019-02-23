@@ -27,6 +27,7 @@
  * See the comments in the ebr_sync() function for detailed explanation.
  */
 
+#include <sys/queue.h>
 #include <stdlib.h>
 #include <stdbool.h>
 #include <string.h>
@@ -45,7 +46,7 @@ typedef struct ebr_tls {
 	 * - Thread list entry (pointer).
 	 */
 	unsigned		local_epoch;
-	struct ebr_tls *	next;
+	LIST_ENTRY(ebr_tls)	entry;
 } ebr_tls_t;
 
 struct ebr {
@@ -55,17 +56,22 @@ struct ebr {
 	 */
 	unsigned		global_epoch;
 	pthread_key_t		tls_key;
-	ebr_tls_t *		list;
+	pthread_mutex_t		lock;
+	LIST_HEAD(, ebr_tls)	list;
 };
 
 ebr_t *
 ebr_create(void)
 {
 	ebr_t *ebr;
+	int ret;
 
-	if ((ebr = calloc(1, sizeof(ebr_t))) == NULL) {
+	ret = posix_memalign((void **)&ebr, CACHE_LINE_SIZE, sizeof(ebr_t));
+	if (ret != 0) {
+		errno = ret;
 		return NULL;
 	}
+	memset(ebr, 0, sizeof(ebr_t));
 	if (pthread_key_create(&ebr->tls_key, free) != 0) {
 		free(ebr);
 		return NULL;
@@ -88,23 +94,41 @@ ebr_destroy(ebr_t *ebr)
 int
 ebr_register(ebr_t *ebr)
 {
-	ebr_tls_t *t, *head;
+	ebr_tls_t *t;
 
 	t = pthread_getspecific(ebr->tls_key);
 	if (__predict_false(t == NULL)) {
-		if ((t = malloc(sizeof(ebr_tls_t))) == NULL) {
+		int ret;
+
+		ret = posix_memalign((void **)&t,
+		    CACHE_LINE_SIZE, sizeof(ebr_tls_t));
+		if (ret != 0) {
+			errno = ret;
 			return -1;
 		}
 		pthread_setspecific(ebr->tls_key, t);
 	}
 	memset(t, 0, sizeof(ebr_tls_t));
 
-	do {
-		head = ebr->list;
-		t->next = head;
-	} while (!atomic_compare_exchange_weak(&ebr->list, head, t));
-
+	pthread_mutex_lock(&ebr->lock);
+	LIST_INSERT_HEAD(&ebr->list, t, entry);
+	pthread_mutex_unlock(&ebr->lock);
 	return 0;
+}
+
+void
+ebr_unregister(ebr_t *ebr)
+{
+	ebr_tls_t *t;
+
+	t = pthread_getspecific(ebr->tls_key);
+	ASSERT(t != NULL);
+	pthread_setspecific(ebr->tls_key, NULL);
+
+	pthread_mutex_lock(&ebr->lock);
+	LIST_REMOVE(t, entry);
+	pthread_mutex_unlock(&ebr->lock);
+	free(t);
 }
 
 /*
@@ -167,27 +191,30 @@ ebr_sync(ebr_t *ebr, unsigned *gc_epoch)
 	 * the global visibility.  We want to allow the callers to
 	 * assume that the ebr_sync() call serves as a full barrier.
 	 */
-	epoch = ebr->global_epoch;
+	epoch = atomic_load_explicit(&ebr->global_epoch, memory_order_relaxed);
 	atomic_thread_fence(memory_order_seq_cst);
 
 	/*
 	 * Check whether all active workers observed the global epoch.
 	 */
-	t = ebr->list;
-	while (t) {
-		const unsigned local_epoch = t->local_epoch; // atomic fetch
-		const bool active = (local_epoch & ACTIVE_FLAG) != 0;
+	LIST_FOREACH(t, &ebr->list, entry) {
+		unsigned local_epoch;
+		bool active;
+
+		local_epoch = atomic_load_explicit(&t->local_epoch,
+		    memory_order_relaxed);
+		active = (local_epoch & ACTIVE_FLAG) != 0;
 
 		if (active && (local_epoch != (epoch | ACTIVE_FLAG))) {
 			/* No, not ready. */
 			*gc_epoch = ebr_gc_epoch(ebr);
 			return false;
 		}
-		t = t->next;
 	}
 
 	/* Yes: increment and announce a new global epoch. */
-	ebr->global_epoch = (epoch + 1) % 3;
+	atomic_store_explicit(&ebr->global_epoch,
+	    (epoch + 1) % 3, memory_order_relaxed);
 
 	/*
 	 * Let the new global epoch be 'e'.  At this point:

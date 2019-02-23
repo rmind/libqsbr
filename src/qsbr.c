@@ -26,6 +26,7 @@
  * Note that this interface is asynchronous.
  */
 
+#include <sys/queue.h>
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
@@ -46,7 +47,7 @@ typedef struct qsbr_tls {
 	 * Also, a pointer to the TLS structure of a next thread.
 	 */
 	qsbr_epoch_t		local_epoch;
-	struct qsbr_tls *	next;
+	LIST_ENTRY(qsbr_tls)	entry;
 } qsbr_tls_t;
 
 struct qsbr {
@@ -55,31 +56,29 @@ struct qsbr {
 	 */
 	qsbr_epoch_t		global_epoch;
 	pthread_key_t		tls_key;
-	qsbr_tls_t *		list;
+	pthread_mutex_t		lock;
+	LIST_HEAD(, qsbr_tls)	list;
 };
 
 qsbr_t *
 qsbr_create(void)
 {
 	qsbr_t *qs;
+	int ret;
 
-	if ((qs = calloc(1, sizeof(qsbr_t))) == NULL) {
+	ret = posix_memalign((void **)&qs, CACHE_LINE_SIZE, sizeof(qsbr_t));
+	if (ret != 0) {
+		errno = ret;
 		return NULL;
 	}
+	memset(qs, 0, sizeof(qsbr_t));
+
 	if (pthread_key_create(&qs->tls_key, free) != 0) {
 		free(qs);
 		return NULL;
 	}
 	qs->global_epoch = 1;
 	return qs;
-}
-
-void
-qsbr_unregister(qsbr_t *qs)
-{
-	qsbr_tls_t *t = pthread_getspecific(qs->tls_key);
-	pthread_setspecific(qs->tls_key, NULL);
-	free(t);
 }
 
 void
@@ -95,23 +94,41 @@ qsbr_destroy(qsbr_t *qs)
 int
 qsbr_register(qsbr_t *qs)
 {
-	qsbr_tls_t *t, *head;
+	qsbr_tls_t *t;
 
 	t = pthread_getspecific(qs->tls_key);
 	if (__predict_false(t == NULL)) {
-		if ((t = malloc(sizeof(qsbr_tls_t))) == NULL) {
-			return ENOMEM;
+		int ret;
+
+		ret = posix_memalign((void **)&t,
+		    CACHE_LINE_SIZE, sizeof(qsbr_tls_t));
+		if (ret != 0) {
+			errno = ret;
+			return -1;
 		}
 		pthread_setspecific(qs->tls_key, t);
 	}
 	memset(t, 0, sizeof(qsbr_tls_t));
 
-	do {
-		head = qs->list;
-		t->next = head;
-	} while (!atomic_compare_exchange_weak(&qs->list, head, t));
-
+	pthread_mutex_lock(&qs->lock);
+	LIST_INSERT_HEAD(&qs->list, t, entry);
+	pthread_mutex_unlock(&qs->lock);
 	return 0;
+}
+
+void
+qsbr_unregister(qsbr_t *qsbr)
+{
+	qsbr_tls_t *t;
+
+	t = pthread_getspecific(qsbr->tls_key);
+	ASSERT(t != NULL);
+	pthread_setspecific(qsbr->tls_key, NULL);
+
+	pthread_mutex_lock(&qsbr->lock);
+	LIST_REMOVE(t, entry);
+	pthread_mutex_unlock(&qsbr->lock);
+	free(t);
 }
 
 /*
@@ -156,13 +173,11 @@ qsbr_sync(qsbr_t *qs, qsbr_epoch_t target)
 	/*
 	 * Have all threads observed the target epoch?
 	 */
-	t = qs->list;
-	while (t) {
+	LIST_FOREACH(t, &qs->list, entry) {
 		if (t->local_epoch < target) {
 			/* Not ready to G/C. */
 			return false;
 		}
-		t = t->next;
 	}
 
 	/* Detected the grace period. */

@@ -23,6 +23,7 @@ __BEGIN_DECLS
 gc_t *	gc_create(unsigned, gc_func_t, void *);
 void	gc_destroy(gc_t *);
 void	gc_register(gc_t *);
+void	gc_unregister(gc_t *);
 
 void	gc_crit_enter(gc_t *);
 void	gc_crit_exit(gc_t *);

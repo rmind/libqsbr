@@ -88,4 +88,9 @@ do {								\
 		(count) += (count);				\
 } while (/* CONSTCOND */ 0);
 
+/*
+ * Cache line size - a reasonable upper bound.
+ */
+#define	CACHE_LINE_SIZE		64
+
 #endif

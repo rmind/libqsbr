@@ -100,6 +100,12 @@ gc_register(gc_t *gc)
 }
 
 void
+gc_unregister(gc_t *gc)
+{
+	ebr_unregister(gc->ebr);
+}
+
+void
 gc_crit_enter(gc_t *gc)
 {
 	ebr_enter(gc->ebr);

@@ -44,8 +44,15 @@ References:
   * Destroy the EBR object.
 
 * `int ebr_register(ebr_t *ebr)`
-  * Register the current thread for EBR synchronisation (normally,
-  as a reader).  Returns 0 on success and -1 on failure.
+  * Register the current thread for EBR synchronisation.  Returns 0 on
+  success and -1 on failure.  Note: each reader thread (i.e. callers of
+  `ebr_enter/ebr_exit`) **must** register.
+
+* `void ebr_unregister(ebr_t *ebr)`
+  * Remove the current thread from the EBR synchronisation list.  Each
+  registered thread must leave the list before the exit (this may be not
+  necessary if all threads exit together).  It is the caller's responsibility
+  to synchronise the thread exit, if needed.
 
 * `void ebr_enter(ebr_t *ebr)`
   * Mark the entrance to the critical path.  Typically, this would be

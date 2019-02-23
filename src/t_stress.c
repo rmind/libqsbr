@@ -164,6 +164,7 @@ ebr_stress(void *arg)
 		ebr_exit(ebr);
 	}
 	pthread_barrier_wait(&barrier);
+	ebr_unregister(ebr);
 	pthread_exit(NULL);
 	return NULL;
 }
@@ -228,6 +229,7 @@ qsbr_stress(void *arg)
 		qsbr_checkpoint(qsbr);
 	}
 	pthread_barrier_wait(&barrier);
+	qsbr_unregister(qsbr);
 	pthread_exit(NULL);
 	return NULL;
 }
@@ -288,6 +290,7 @@ gc_stress(void *arg)
 		gc_crit_exit(gc);
 	}
 	pthread_barrier_wait(&barrier);
+	gc_unregister(gc);
 	pthread_exit(NULL);
 	return NULL;
 }
