@@ -76,6 +76,7 @@ ebr_create(void)
 		free(ebr);
 		return NULL;
 	}
+	pthread_mutex_init(&ebr->lock, NULL);
 	return ebr;
 }
 
@@ -83,6 +84,7 @@ void
 ebr_destroy(ebr_t *ebr)
 {
 	pthread_key_delete(ebr->tls_key);
+	pthread_mutex_destroy(&ebr->lock);
 	free(ebr);
 }
 

@@ -77,6 +77,7 @@ qsbr_create(void)
 		free(qs);
 		return NULL;
 	}
+	pthread_mutex_init(&qs->lock, NULL);
 	qs->global_epoch = 1;
 	return qs;
 }
@@ -85,6 +86,7 @@ void
 qsbr_destroy(qsbr_t *qs)
 {
 	pthread_key_delete(qs->tls_key);
+	pthread_mutex_destroy(&qs->lock);
 	free(qs);
 }
 
