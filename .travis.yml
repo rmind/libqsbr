@@ -1,5 +1,5 @@
 sudo: required
-dist: trusty
+dist: xenial
 
 language: c
 
@@ -7,4 +7,13 @@ compiler:
   - gcc
   - clang
 
-script: cd src && make tests && make clean stress
+install:
+  - sudo apt-get install -y build-essential fakeroot debhelper
+  - sudo apt-get install -y libtool libtool-bin
+
+script:
+  # Build the package.
+  - (cd pkg && make deb)
+  # Run the unit and stress tests.
+  - (cd src && make tests)
+  - (cd src && make clean && make stress)
