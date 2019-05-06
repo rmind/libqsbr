@@ -31,8 +31,10 @@
 #include <stdlib.h>
 #include <stdbool.h>
 #include <string.h>
+#include <time.h>
 #include <errno.h>
 #include <pthread.h>
+#include <sched.h>
 
 #include "ebr.h"
 #include "utils.h"
@@ -265,4 +267,25 @@ ebr_gc_epoch(ebr_t *ebr)
 	 * epoch with clock arithmetics.
 	 */
 	return (ebr->global_epoch + 1) % 3;
+}
+
+void
+ebr_full_sync(ebr_t *ebr, unsigned msec_retry)
+{
+	const struct timespec dtime = { 0, msec_retry * 1000 * 1000 };
+	const unsigned target_epoch = ebr_staging_epoch(ebr);
+	unsigned epoch, count = SPINLOCK_BACKOFF_MIN;
+wait:
+	while (!ebr_sync(ebr, &epoch)) {
+		if (count < SPINLOCK_BACKOFF_MAX) {
+			SPINLOCK_BACKOFF(count);
+		} else if (msec_retry) {
+			(void)nanosleep(&dtime, NULL);
+		} else {
+			sched_yield();
+		}
+	}
+	if (target_epoch != epoch) {
+		goto wait;
+	}
 }

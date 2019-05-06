@@ -19,7 +19,7 @@ can be practical.
 
 A typical use case of the EBR or QSBR would be together with lock-free
 data structures.  This library provides raw EBR and QSBR mechanisms as
-well as a higher level a garbage collection (GC) interface based on EBR.
+well as a higher level garbage collection (GC) interface based on EBR.
 
 The implementation is written in C11 and distributed under the
 2-clause BSD license.
@@ -68,8 +68,8 @@ References:
 * `bool ebr_sync(ebr_t *ebr, unsigned *gc_epoch)`
   * Attempt to synchronise and announce a new epoch.  Returns `true` if
   a new epoch is announced and `false` otherwise.  In either case, the
-  _epoch_ available for reclamation is returned.  The number of epochs is
-  defined by the `EBR_EPOCHS` constant and the epoch value is
+  _epoch_ available for reclamation is returned.  The number of epochs
+  is defined by the `EBR_EPOCHS` constant and the epoch value is
   `0 <= epoch < EBR_EPOCHS`.
   * The synchronisation points must be serialised (e.g. if there are
   multiple G/C workers or other writers).  Generally, calls to
@@ -85,10 +85,21 @@ References:
 
 * `unsigned ebr_gc_epoch(ebr_t *ebr)`
   * Returns the _epoch_ available for reclamation, i.e. the epoch where
-  it is guaranteed that the objects are safe to be destroyed.  The _epoch_
-  value will be the same as returned by the last successful `ebr_sync`
-  call.  Note that these two functions would require the same form of
-  serialisation.
+  it is guaranteed that the objects are safe to be reclaimed/destroyed.
+  The _epoch_ value will be the same as returned by the last successful
+  `ebr_sync` call.  Note that these two functions would require the same
+  form of serialisation.
+
+* `void ebr_full_sync(ebr_t *ebr, unsigned msec_retry)`
+  * Perform full synchronisation ensuring that all objects which are no
+  longer globally visible (and potentially staged for reclamation) at the
+  time of calling this routine will be safe to reclaim/destroy after this
+  synchronisation routine completes and returns.  Note: the synchronisation
+  may take across multiple epochs.
+  * This function will block for `msec_retry` milliseconds before trying
+  again if there are objects which cannot be reclaimed immediately.  If
+  this value is zero, then it will invoke `sched_yield(2)` before retrying.
+
 
 ## G/C API
 
@@ -145,7 +156,9 @@ References:
 The implementation was extensively tested on a 24-core x86 machine,
 see [the stress test](src/t_stress.c) for the details on the technique.
 
-## Examples ###
+## Examples
+
+### G/C API example
 
 The G/C mechanism should be created by some master thread.
 ```c
