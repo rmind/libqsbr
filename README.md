@@ -100,6 +100,11 @@ References:
   again if there are objects which cannot be reclaimed immediately.  If
   this value is zero, then it will invoke `sched_yield(2)` before retrying.
 
+* `bool ebr_incrit_p(ebr_t *ebr)`
+  * Returns `true` if the current worker is in the critical path, i.e.
+  called `ebr_enter(); otherwise, returns `false`.  This routine should
+  generally only be used for diagnostic asserts.
+
 
 ## G/C API
 

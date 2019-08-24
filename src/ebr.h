@@ -26,6 +26,7 @@ bool		ebr_sync(ebr_t *, unsigned *);
 unsigned	ebr_staging_epoch(ebr_t *);
 unsigned	ebr_gc_epoch(ebr_t *);
 void		ebr_full_sync(ebr_t *, unsigned);
+bool		ebr_incrit_p(ebr_t *);
 
 __END_DECLS
 
