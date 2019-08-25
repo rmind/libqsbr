@@ -102,7 +102,7 @@ References:
 
 * `bool ebr_incrit_p(ebr_t *ebr)`
   * Returns `true` if the current worker is in the critical path, i.e.
-  called `ebr_enter(); otherwise, returns `false`.  This routine should
+  called `ebr_enter()`; otherwise, returns `false`.  This routine should
   generally only be used for diagnostic asserts.
 
 
