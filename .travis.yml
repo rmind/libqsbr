@@ -1,15 +1,29 @@
-sudo: required
-dist: xenial
-
 language: c
 
 compiler:
   - gcc
   - clang
 
-install:
-  - sudo apt-get install -y build-essential fakeroot debhelper
-  - sudo apt-get install -y libtool libtool-bin
+dist: bionic
+
+matrix:
+  include:
+    - os: linux
+      arch: amd64
+    - os: linux
+      arch: arm64
+    - os: linux
+      arch: ppc64le
+
+addons:
+  apt:
+    update: true
+    packages:
+    - build-essential
+    - fakeroot
+    - debhelper
+    - libtool
+    - libtool-bin
 
 script:
   # Build the package.
