@@ -4,9 +4,11 @@
 
 PROJ=		qsbr
 
-UNAME:=		$(shell uname)
+SYSNAME:=	$(shell uname -s)
+SYSARCH:=	$(shell uname -m)
+
 CFLAGS+=	-std=c11 -O2 -g -Wall -Wextra -Werror
-ifneq ($(UNAME), FreeBSD)
+ifneq ($(SYSNAME), FreeBSD)
 CFLAGS+=	-D_POSIX_C_SOURCE=200809L
 endif
 CFLAGS+=	-D_GNU_SOURCE -D_DEFAULT_SOURCE
